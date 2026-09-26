@@ -1,0 +1,38 @@
+[
+  {
+    "name": "tfidf_word_lr",
+    "fit_seconds": 5.47,
+    "infer_ms_per_row": 0.007,
+    "accuracy_eval_pool": 0.828,
+    "mean_max_prob": 0.397,
+    "rows": 8600,
+    "path": "examples/clinc_oos/providers/tfidf_word_lr.jsonl"
+  },
+  {
+    "name": "tfidf_char_lr",
+    "fit_seconds": 12.38,
+    "infer_ms_per_row": 0.026,
+    "accuracy_eval_pool": 0.8634,
+    "mean_max_prob": 0.5758,
+    "rows": 8600,
+    "path": "examples/clinc_oos/providers/tfidf_char_lr.jsonl"
+  },
+  {
+    "name": "tfidf_svm_sigmoid",
+    "fit_seconds": 2.31,
+    "infer_ms_per_row": 0.014,
+    "accuracy_eval_pool": 0.8394,
+    "mean_max_prob": 0.7364,
+    "rows": 8600,
+    "path": "examples/clinc_oos/providers/tfidf_svm_sigmoid.jsonl"
+  },
+  {
+    "name": "tfidf_cnb",
+    "fit_seconds": 0.08,
+    "infer_ms_per_row": 0.006,
+    "accuracy_eval_pool": 0.6684,
+    "mean_max_prob": 0.0386,
+    "rows": 8600,
+    "path": "examples/clinc_oos/providers/tfidf_cnb.jsonl"
+  }
+]

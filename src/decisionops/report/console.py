@@ -1,0 +1,419 @@
+"""Rich console summaries."""
+
+from __future__ import annotations
+
+from rich.console import Console
+from rich.markup import escape
+from rich.table import Table
+
+from decisionops.conformal.certify import CertificationReport
+from decisionops.schemas import ComparisonReport, EvalResult, GateReport
+
+
+def print_eval_report(result: EvalResult, console: Console | None = None) -> None:
+    console = console or Console()
+
+    console.print()
+    console.rule("[bold]DecisionOps Eval[/bold]")
+    console.print(
+        f"samples={result.n_samples}"
+        + (f"  provider={result.provider}" if result.provider else "")
+        + (f"  model={result.model}" if result.model else "")
+    )
+    protocol = (result.metadata or {}).get("protocol")
+    if protocol:
+        console.print(f"[dim]protocol={protocol}[/dim]")
+    console.print()
+
+    metrics = Table(title="Core Metrics", show_header=True, header_style="bold")
+    metrics.add_column("Metric")
+    metrics.add_column("Value", justify="right")
+    metrics.add_row("Accuracy", f"{result.accuracy:.4f}")
+    metrics.add_row("ECE", f"{result.ece:.4f}")
+    metrics.add_row("Brier", f"{result.brier:.4f}")
+    metrics.add_row("NLL", f"{result.nll:.4f}")
+    console.print(metrics)
+
+    if result.latency.count > 0:
+        lat = Table(title="Latency (ms)", show_header=True, header_style="bold")
+        lat.add_column("Stat")
+        lat.add_column("Value", justify="right")
+        lat.add_row("count", str(result.latency.count))
+        if result.latency.p50_ms is not None:
+            lat.add_row("P50", f"{result.latency.p50_ms:.1f}")
+        if result.latency.p95_ms is not None:
+            lat.add_row("P95", f"{result.latency.p95_ms:.1f}")
+        if result.latency.p99_ms is not None:
+            lat.add_row("P99", f"{result.latency.p99_ms:.1f}")
+        if result.latency.mean_ms is not None:
+            lat.add_row("mean", f"{result.latency.mean_ms:.1f}")
+        console.print(lat)
+
+    if result.thresholds:
+        thr = Table(
+            title="Empirical Thresholds (not conformal-certified)",
+            show_header=True,
+            header_style="bold",
+        )
+        thr.add_column("Target Risk")
+        thr.add_column("Threshold", justify="right")
+        thr.add_column("Coverage", justify="right")
+        thr.add_column("Sel. Acc", justify="right")
+        thr.add_column("Sel. Risk", justify="right")
+        thr.add_column("Accepted", justify="right")
+        for t in result.thresholds:
+            thr.add_row(
+                f"{t.target_risk:.2%}",
+                f"{t.threshold:.3f}",
+                f"{t.coverage:.1%}",
+                f"{t.selective_accuracy:.4f}",
+                f"{t.selective_risk:.4f}",
+                f"{t.n_accepted}/{t.n_total}",
+            )
+        console.print(thr)
+        console.print(
+            "[dim]Same-set path: thresholds fit and scored on one labeled pool. "
+            "Prefer `decisionops gate` (cal/test split) for serious decisions.[/dim]"
+        )
+
+    console.print()
+
+
+def print_gate_report(report: GateReport, console: Console | None = None) -> None:
+    console = console or Console()
+
+    console.print()
+    console.rule("[bold]DecisionOps Technical Gate[/bold]")
+    console.print(
+        f"n_total={report.split.n_total}  "
+        f"n_cal={report.split.n_calibration}  "
+        f"n_test={report.split.n_test}  "
+        f"cal_ratio={report.split.cal_ratio:.2f}  "
+        f"seed={report.split.seed}"
+    )
+    if report.provider or report.model:
+        console.print(
+            (f"provider={report.provider}  " if report.provider else "")
+            + (f"model={report.model}" if report.model else "")
+        )
+    if report.temperature is not None:
+        console.print(
+            f"temperature T={report.temperature:.4f}  "
+            f"(fit NLL {report.temperature_fit.get('nll_before', float('nan')):.4f} "
+            f"→ {report.temperature_fit.get('nll_after', float('nan')):.4f})"
+        )
+    if report.isotonic_fit:
+        console.print(
+            "isotonic  "
+            f"(fit NLL {report.isotonic_fit.get('nll_before', float('nan')):.4f} "
+            f"→ {report.isotonic_fit.get('nll_after', float('nan')):.4f})"
+        )
+    console.print()
+
+    metrics = Table(
+        title="Test-set metrics (thresholds chosen on calibration only)",
+        show_header=True,
+        header_style="bold",
+    )
+    metrics.add_column("Condition")
+    metrics.add_column("Accuracy", justify="right")
+    metrics.add_column("ECE", justify="right")
+    metrics.add_column("Brier", justify="right")
+    metrics.add_column("NLL", justify="right")
+    for c in report.conditions:
+        metrics.add_row(
+            c.name,
+            f"{c.accuracy:.4f}",
+            f"{c.ece:.4f}",
+            f"{c.brier:.4f}",
+            f"{c.nll:.4f}",
+        )
+    console.print(metrics)
+
+    thr = Table(
+        title="Test coverage at calibration-chosen thresholds",
+        show_header=True,
+        header_style="bold",
+    )
+    thr.add_column("Condition")
+    thr.add_column("Target Risk")
+    thr.add_column("Thr (cal)", justify="right")
+    thr.add_column("Coverage (test)", justify="right")
+    thr.add_column("Sel. Risk (test)", justify="right")
+    thr.add_column("Accepted", justify="right")
+    for c in report.conditions:
+        for t in c.thresholds:
+            thr.add_row(
+                c.name,
+                f"{t.target_risk:.2%}",
+                f"{t.threshold:.3f}",
+                f"{t.coverage:.1%}",
+                f"{t.selective_risk:.4f}",
+                f"{t.n_accepted}/{t.n_total}",
+            )
+    console.print(thr)
+
+    v = report.verdict
+    color = {"go": "green", "watch": "yellow", "no-go": "red"}.get(v.recommendation, "white")
+    console.print()
+    console.print(f"[bold {color}]Verdict: {v.recommendation.upper()}[/bold {color}]")
+    if v.ece_relative_drop is not None:
+        console.print(f"ECE relative drop: {v.ece_relative_drop:.1%}")
+    if v.coverage_at_1pct is not None:
+        console.print(f"Coverage @ 1% risk (focus condition): {v.coverage_at_1pct:.1%}")
+    if v.coverage_at_5pct is not None:
+        console.print(f"Coverage @ 5% risk (focus condition): {v.coverage_at_5pct:.1%}")
+    for note in v.notes:
+        console.print(f"• {note}")
+    console.print(
+        "[dim]Heuristic gate only — not conformal-certified; "
+        "not a substitute for domain review.[/dim]"
+    )
+    console.print()
+
+
+def print_certification_report(
+    report: CertificationReport, console: Console | None = None
+) -> None:
+    console = console or Console()
+
+    console.print()
+    console.rule("[bold]DecisionOps Certification (Conformal Risk Control)[/bold]")
+    console.print(
+        f"n_total={report.split.n_total}  "
+        f"n_crc_cal={report.split.n_calibration}  "
+        f"n_test={report.split.n_test}  "
+        f"cal_ratio={report.split.cal_ratio:.2f}  "
+        f"seed={report.split.seed}"
+    )
+    if report.provider or report.model:
+        console.print(
+            (f"provider={report.provider}  " if report.provider else "")
+            + (f"model={report.model}" if report.model else "")
+        )
+    if report.temperature is not None:
+        console.print(
+            f"temperature T={report.temperature:.4f}  "
+            f"(fit on {report.n_temperature_fit} samples, disjoint from the CRC set)"
+        )
+    else:
+        console.print("[dim]temperature: not applied[/dim]")
+    console.print()
+
+    cert = Table(
+        title="Certified thresholds (joint automated error rate <= alpha)",
+        show_header=True,
+        header_style="bold",
+    )
+    cert.add_column("Target alpha")
+    cert.add_column("Certified", justify="center")
+    cert.add_column("Threshold", justify="right")
+    cert.add_column("CRC bound", justify="right")
+    cert.add_column("Coverage (cal)", justify="right")
+    cert.add_column("n_cal / min_n", justify="right")
+
+    for level in report.levels:
+        c = level.certificate
+        if not c.feasible:
+            cert.add_row(
+                f"{c.alpha:.2%}",
+                "[red]INFEASIBLE[/red]",
+                "—",
+                "—",
+                "—",
+                f"{c.n_calibration} / {c.min_n_required}",
+            )
+            continue
+        cert.add_row(
+            f"{c.alpha:.2%}",
+            "[green]yes[/green]",
+            f"{c.threshold:.4f}",
+            "—" if c.crc_bound_value is None else f"{c.crc_bound_value:.4f}",
+            "—" if c.coverage_calibration is None else f"{c.coverage_calibration:.1%}",
+            f"{c.n_calibration} / {c.min_n_required}",
+        )
+    console.print(cert)
+
+    feasible = [lv for lv in report.levels if lv.certificate.feasible and lv.test]
+    if feasible:
+        held = Table(
+            title="Held-out measurement at the certified threshold",
+            show_header=True,
+            header_style="bold",
+        )
+        held.add_column("Target alpha")
+        held.add_column("Coverage (test)", justify="right")
+        held.add_column("Joint err (test)", justify="right")
+        held.add_column("Sel. risk (test)", justify="right")
+        held.add_column("Accepted", justify="right")
+        held.add_column("<= alpha?", justify="center")
+        for level in feasible:
+            t = level.test or {}
+            ok = level.bound_held_on_test
+            held.add_row(
+                f"{level.certificate.alpha:.2%}",
+                f"{float(t['coverage']):.1%}",
+                f"{float(t['joint_error_rate']):.4f}",
+                f"{float(t['selective_risk']):.4f}",
+                f"{int(t['n_accepted'])}/{int(t['n_total'])}",
+                "[green]yes[/green]" if ok else "[yellow]no[/yellow]",
+            )
+        console.print(held)
+        console.print(
+            "[dim]A single test split landing above alpha is expected roughly half "
+            r"the time — the guarantee is on E\[loss]. Judge by averaging over seeds.[/dim]"
+        )
+
+    infeasible = [lv for lv in report.levels if not lv.certificate.feasible]
+    if infeasible:
+        console.print()
+        console.print(
+            f"[bold red]No certificate at "
+            f"{', '.join(f'{lv.certificate.alpha:.0%}' for lv in infeasible)}.[/bold red] "
+            "Abstain on all traffic at those levels."
+        )
+        for level in infeasible:
+            for note in level.certificate.notes:
+                console.print(f"  [red]•[/red] {escape(note)}")
+
+    console.print()
+    for note in report.notes:
+        console.print(f"• {escape(note)}")
+    console.print()
+
+
+def _risk_key(risk: float) -> str:
+    return f"{risk:.4f}".rstrip("0").rstrip(".")
+
+
+def print_comparison_report(
+    report: ComparisonReport, console: Console | None = None
+) -> None:
+    console = console or Console()
+
+    console.print()
+    console.rule("[bold]DecisionOps Model Comparison[/bold]")
+    n_crc = (report.metadata or {}).get("n_crc_calibration")
+    crc_bit = f"  n_crc_cal={n_crc}" if n_crc is not None else ""
+    console.print(
+        f"dataset={report.dataset}  "
+        f"n_cal={report.split.n_calibration}  "
+        f"n_test={report.split.n_test}  "
+        f"seed={report.split.seed}{crc_bit}  "
+        f"(shared split across models)"
+    )
+    console.print(
+        "[dim]Certified quantity is the joint automated error rate, "
+        "not conditional selective risk.[/dim]"
+    )
+    console.print()
+
+    quality = Table(
+        title="Test quality (calibrated condition where available)",
+        show_header=True,
+        header_style="bold",
+    )
+    quality.add_column("Model")
+    quality.add_column("Acc", justify="right")
+    quality.add_column("ECE raw", justify="right")
+    quality.add_column("ECE cal", justify="right")
+    quality.add_column("Brier cal", justify="right")
+    quality.add_column("NLL cal", justify="right")
+    quality.add_column("T", justify="right")
+    for e in report.entries:
+        quality.add_row(
+            e.name,
+            f"{e.accuracy:.4f}",
+            f"{e.ece_raw:.4f}",
+            "—" if e.ece_calibrated is None else f"{e.ece_calibrated:.4f}",
+            "—" if e.brier_calibrated is None else f"{e.brier_calibrated:.4f}",
+            "—" if e.nll_calibrated is None else f"{e.nll_calibrated:.4f}",
+            "—" if e.temperature is None else f"{e.temperature:.3f}",
+        )
+    console.print(quality)
+
+    cert = Table(
+        title="Certified coverage (CRC; joint automated error rate)",
+        show_header=True,
+        header_style="bold",
+    )
+    cert.add_column("Model", no_wrap=True)
+    for risk in report.target_risks:
+        cert.add_column(f"@{risk:.0%} cov (jerr)", justify="right", no_wrap=True)
+    cert.add_column("P95 ms", justify="right")
+    cert.add_column("Verdict", no_wrap=True)
+
+    for e in report.entries:
+        row = [e.name]
+        for risk in report.target_risks:
+            key = _risk_key(risk)
+            if not e.certified_feasible_by_risk.get(key):
+                row.append("[red]infeasible[/red]")
+                continue
+            c = e.certified_coverage_by_risk.get(key)
+            j = e.certified_joint_error_by_risk.get(key)
+            if c is None:
+                row.append("—")
+            elif j is None:
+                row.append(f"{c:.1%}")
+            else:
+                row.append(f"{c:.1%} ({j:.3f})")
+        row.append("—" if e.latency_p95_ms is None else f"{e.latency_p95_ms:.2f}")
+        row.append(e.verdict)
+        cert.add_row(*row)
+    console.print(cert)
+
+    emp = Table(
+        title="Empirical coverage (not certified; ! = test selective risk > target)",
+        show_header=True,
+        header_style="bold",
+    )
+    emp.add_column("Model", no_wrap=True)
+    for risk in report.target_risks:
+        emp.add_column(f"@{risk:.0%} cov (risk)", justify="right", no_wrap=True)
+
+    for e in report.entries:
+        row = [e.name]
+        for risk in report.target_risks:
+            key = _risk_key(risk)
+            c = e.coverage_by_risk.get(key)
+            r = e.selective_risk_by_risk.get(key)
+            if c is None:
+                row.append("—")
+                continue
+            if r is None:
+                row.append(f"{c:.1%}")
+            else:
+                marker = "!" if r > risk + 1e-9 else ""
+                row.append(f"{c:.1%} ({r:.3f}){marker}")
+        emp.add_row(*row)
+    console.print(emp)
+
+    if report.best_by_coverage_at:
+        console.print()
+        counts = (report.metadata or {}).get("n_feasible_by_risk", {})
+        for risk in report.target_risks:
+            key = _risk_key(risk)
+            winner = report.best_by_coverage_at.get(key)
+            if not winner:
+                console.print(
+                    f"@{risk:.0%} risk: [red]no feasible certificate[/red] — abstain"
+                )
+                continue
+            entry = next((e for e in report.entries if e.name == winner), None)
+            cov_v = entry.certified_coverage_by_risk.get(key) if entry else None
+            n_ok = counts.get(key)
+            suffix = ""
+            if isinstance(n_ok, int):
+                suffix = (
+                    f"  [dim]({n_ok}/{len(report.entries)} "
+                    f"had a feasible certificate)[/dim]"
+                )
+            cov_txt = "" if cov_v is None else f" at {cov_v:.1%} certified coverage"
+            console.print(
+                f"Most automation with a @{risk:.0%} CRC certificate: "
+                f"[bold]{winner}[/bold]{cov_txt}{suffix}"
+            )
+    for note in report.notes:
+        console.print(f"• {escape(note)}")
+    console.print()

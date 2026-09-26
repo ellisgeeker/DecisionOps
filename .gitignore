@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Tools
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.dmypy.json
+coverage.xml
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local outputs
+/report/
+/reports/
+/output/
+*.log
+
+# Model caches (future adapters)
+.cache/
+models/
+
+# Claude Code local settings / scratch
+.claude/
+
+# Large regenerated HF packs (rebuild with scripts/prepare_hf_intent_gates.py)
+# Keep small toy/synthetic examples and non-JSONL summaries/reports.
+examples/banking77/**/*.jsonl
+examples/clinc_oos/**/*.jsonl

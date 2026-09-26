@@ -1,0 +1,192 @@
+{
+  "dataset": "providers",
+  "split": {
+    "seed": 42,
+    "cal_ratio": 0.3,
+    "n_total": 800,
+    "n_calibration": 240,
+    "n_test": 560
+  },
+  "target_risks": [
+    0.01,
+    0.05,
+    0.1
+  ],
+  "entries": [
+    {
+      "name": "laya",
+      "provider": "laya",
+      "model": "rl-agent",
+      "n_test": 560,
+      "accuracy": 0.4089285714285714,
+      "ece_raw": 0.5684149934801273,
+      "ece_calibrated": 0.03806781963682328,
+      "brier_raw": 1.1530706936545057,
+      "brier_calibrated": 0.8068446359532411,
+      "nll_raw": 14.267296398233563,
+      "nll_calibrated": 3.049937235346006,
+      "temperature": 6.559220390843872,
+      "coverage_by_risk": {
+        "0.01": 0.0,
+        "0.05": 0.0,
+        "0.1": 0.0
+      },
+      "selective_risk_by_risk": {
+        "0.01": 1.0,
+        "0.05": 1.0,
+        "0.1": 1.0
+      },
+      "threshold_by_risk": {
+        "0.01": 1.0,
+        "0.05": 1.0,
+        "0.1": 1.0
+      },
+      "latency_p95_ms": 10.9,
+      "verdict": "watch"
+    },
+    {
+      "name": "laya_rawT",
+      "provider": "laya",
+      "model": "rl-agent",
+      "n_test": 560,
+      "accuracy": 0.4089285714285714,
+      "ece_raw": 0.3406847304277808,
+      "ece_calibrated": 0.11413628156125566,
+      "brier_raw": 0.9148619864520953,
+      "brier_calibrated": 0.7950392535238026,
+      "nll_raw": 3.55400755770116,
+      "nll_calibrated": 2.7822974099287903,
+      "temperature": 1.9960402310261138,
+      "coverage_by_risk": {
+        "0.01": 0.0,
+        "0.05": 0.0,
+        "0.1": 0.0
+      },
+      "selective_risk_by_risk": {
+        "0.01": 1.0,
+        "0.05": 1.0,
+        "0.1": 1.0
+      },
+      "threshold_by_risk": {
+        "0.01": 1.0,
+        "0.05": 1.0,
+        "0.1": 1.0
+      },
+      "latency_p95_ms": 3.47,
+      "verdict": "watch"
+    },
+    {
+      "name": "word_lr",
+      "provider": "sklearn",
+      "model": "tfidf_word_lr",
+      "n_test": 560,
+      "accuracy": 0.85,
+      "ece_raw": 0.4304813300503982,
+      "ece_calibrated": 0.03402368065934547,
+      "brier_raw": 0.4460152536864617,
+      "brier_calibrated": 0.2146255672903782,
+      "nll_raw": 1.223811013575407,
+      "nll_calibrated": 0.5310499473093754,
+      "temperature": 0.36340576961930626,
+      "coverage_by_risk": {
+        "0.01": 0.6125,
+        "0.05": 0.8107142857142857,
+        "0.1": 0.9017857142857143
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.029154518950437303,
+        "0.05": 0.06387665198237891,
+        "0.1": 0.09504950495049502
+      },
+      "threshold_by_risk": {
+        "0.01": 0.94,
+        "0.05": 0.68,
+        "0.1": 0.5
+      },
+      "latency_p95_ms": 0.009,
+      "verdict": "go"
+    },
+    {
+      "name": "char_lr",
+      "provider": "sklearn",
+      "model": "tfidf_char_lr",
+      "n_test": 560,
+      "accuracy": 0.8892857142857142,
+      "ece_raw": 0.26076316025957375,
+      "ece_calibrated": 0.02093690768258318,
+      "brier_raw": 0.2657511112384581,
+      "brier_calibrated": 0.16938884176787986,
+      "nll_raw": 0.717541978962807,
+      "nll_calibrated": 0.4202668924677386,
+      "temperature": 0.4977673159364786,
+      "coverage_by_risk": {
+        "0.01": 0.6821428571428572,
+        "0.05": 0.8803571428571428,
+        "0.1": 0.9321428571428572
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.01308900523560208,
+        "0.05": 0.05679513184584184,
+        "0.1": 0.07471264367816088
+      },
+      "threshold_by_risk": {
+        "0.01": 0.92,
+        "0.05": 0.6,
+        "0.1": 0.5
+      },
+      "latency_p95_ms": 0.034,
+      "verdict": "go"
+    },
+    {
+      "name": "svm_sig",
+      "provider": "sklearn",
+      "model": "tfidf_svm_sigmoid",
+      "n_test": 560,
+      "accuracy": 0.8767857142857143,
+      "ece_raw": 0.12440183602402197,
+      "ece_calibrated": 0.01725189955577224,
+      "brier_raw": 0.19935424625486173,
+      "brier_calibrated": 0.18018460548049217,
+      "nll_raw": 0.5105265755537702,
+      "nll_calibrated": 0.4199613865513163,
+      "temperature": 0.7067287703614561,
+      "coverage_by_risk": {
+        "0.01": 0.45535714285714285,
+        "0.05": 0.8446428571428571,
+        "0.1": 0.95
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.0117647058823529,
+        "0.05": 0.05708245243128962,
+        "0.1": 0.09210526315789469
+      },
+      "threshold_by_risk": {
+        "0.01": 0.97,
+        "0.05": 0.69,
+        "0.1": 0.5
+      },
+      "latency_p95_ms": 0.015,
+      "verdict": "go"
+    }
+  ],
+  "best_by_coverage_at": {
+    "0.01": "char_lr",
+    "0.05": "char_lr",
+    "0.1": "svm_sig"
+  },
+  "notes": [
+    "@1%: no model held the risk target on test; showing highest coverage (char_lr) — treat as not certified.",
+    "@5%: no model held the risk target on test; showing highest coverage (char_lr) — treat as not certified.",
+    "@10%: 2 of 5 models exceeded the risk target on test and were excluded from the ranking."
+  ],
+  "metadata": {
+    "protocol": "shared_cal_test_split",
+    "seed": 42,
+    "ranking_rule": "max coverage among models holding the test risk target",
+    "n_feasible_by_risk": {
+      "0.01": 0,
+      "0.05": 0,
+      "0.1": 3
+    }
+  }
+}

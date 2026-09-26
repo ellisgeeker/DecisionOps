@@ -1,0 +1,15 @@
+{
+  "pack": "banking77",
+  "n": 3076,
+  "n_choices": 77,
+  "accuracy": 0.3813,
+  "mean_max_prob": 0.724,
+  "temperature_applied": [
+    1.0
+  ],
+  "builtin_temperature": false,
+  "seconds_total": 299.6,
+  "ms_per_case": 97.4,
+  "predictions": "examples/banking77/providers/laya_rawT.jsonl",
+  "dataset_subset": "examples/banking77/providers/laya_rawT_dataset.jsonl"
+}

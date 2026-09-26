@@ -1,0 +1,160 @@
+{
+  "dataset": "clinc_oos",
+  "split": {
+    "seed": 42,
+    "cal_ratio": 0.3,
+    "n_total": 8600,
+    "n_calibration": 2580,
+    "n_test": 6020
+  },
+  "target_risks": [
+    0.01,
+    0.05,
+    0.1
+  ],
+  "entries": [
+    {
+      "name": "word_lr",
+      "provider": "sklearn",
+      "model": "tfidf_word_lr",
+      "n_test": 6020,
+      "accuracy": 0.8317275747508306,
+      "ece_raw": 0.43131720356436204,
+      "ece_calibrated": 0.036554882505972316,
+      "brier_raw": 0.47476640468633535,
+      "brier_calibrated": 0.24521814708070877,
+      "nll_raw": 1.4488033861109741,
+      "nll_calibrated": 0.679626789023875,
+      "temperature": 0.4064799531577237,
+      "coverage_by_risk": {
+        "0.01": 0.0,
+        "0.05": 0.7068106312292359,
+        "0.1": 0.8435215946843854
+      },
+      "selective_risk_by_risk": {
+        "0.01": 1.0,
+        "0.05": 0.042538190364277306,
+        "0.1": 0.09196534068530915
+      },
+      "threshold_by_risk": {
+        "0.01": 1.0,
+        "0.05": 0.84,
+        "0.1": 0.55
+      },
+      "latency_p95_ms": 0.007,
+      "verdict": "watch"
+    },
+    {
+      "name": "char_lr",
+      "provider": "sklearn",
+      "model": "tfidf_char_lr",
+      "n_test": 6020,
+      "accuracy": 0.8632890365448505,
+      "ece_raw": 0.284747310094151,
+      "ece_calibrated": 0.02814931560699077,
+      "brier_raw": 0.32645419069418347,
+      "brier_calibrated": 0.2037202574402847,
+      "nll_raw": 0.9578183779329333,
+      "nll_calibrated": 0.5425365217049307,
+      "temperature": 0.47851059874315244,
+      "coverage_by_risk": {
+        "0.01": 0.0,
+        "0.05": 0.7888704318936877,
+        "0.1": 0.9006644518272425
+      },
+      "selective_risk_by_risk": {
+        "0.01": 1.0,
+        "0.05": 0.048852389976837274,
+        "0.1": 0.08945038731095534
+      },
+      "threshold_by_risk": {
+        "0.01": 1.0,
+        "0.05": 0.76,
+        "0.1": 0.5
+      },
+      "latency_p95_ms": 0.026,
+      "verdict": "watch"
+    },
+    {
+      "name": "svm_sig",
+      "provider": "sklearn",
+      "model": "tfidf_svm_sigmoid",
+      "n_test": 6020,
+      "accuracy": 0.8431893687707641,
+      "ece_raw": 0.10475019387861992,
+      "ece_calibrated": 0.01283776719494817,
+      "brier_raw": 0.2425313298294142,
+      "brier_calibrated": 0.23243334901011797,
+      "nll_raw": 0.700076619512954,
+      "nll_calibrated": 0.626085967971629,
+      "temperature": 0.7877867100250678,
+      "coverage_by_risk": {
+        "0.01": 0.40514950166112956,
+        "0.05": 0.7483388704318937,
+        "0.1": 0.8750830564784053
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.0073800738007380184,
+        "0.05": 0.05105438401775808,
+        "0.1": 0.09453302961275623
+      },
+      "threshold_by_risk": {
+        "0.01": 0.97,
+        "0.05": 0.78,
+        "0.1": 0.55
+      },
+      "latency_p95_ms": 0.014,
+      "verdict": "go"
+    },
+    {
+      "name": "cnb",
+      "provider": "sklearn",
+      "model": "tfidf_cnb",
+      "n_test": 6020,
+      "accuracy": 0.6729235880398671,
+      "ece_raw": 0.6341443079219762,
+      "ece_calibrated": 0.1590358626068752,
+      "brier_raw": 0.9393101598572142,
+      "brier_calibrated": 0.5132701490748477,
+      "nll_raw": 3.9787737645592163,
+      "nll_calibrated": 1.9515780726101755,
+      "temperature": 0.12839418814145392,
+      "coverage_by_risk": {
+        "0.01": 0.004651162790697674,
+        "0.05": 0.004651162790697674,
+        "0.1": 0.44950166112956813
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.0,
+        "0.05": 0.0,
+        "0.1": 0.09127864005912789
+      },
+      "threshold_by_risk": {
+        "0.01": 1.0,
+        "0.05": 1.0,
+        "0.1": 0.92
+      },
+      "latency_p95_ms": 0.006,
+      "verdict": "watch"
+    }
+  ],
+  "best_by_coverage_at": {
+    "0.01": "svm_sig",
+    "0.05": "char_lr",
+    "0.1": "char_lr"
+  },
+  "notes": [
+    "@1%: 2 of 4 models exceeded the risk target on test and were excluded from the ranking.",
+    "@5%: 1 of 4 models exceeded the risk target on test and were excluded from the ranking."
+  ],
+  "metadata": {
+    "protocol": "shared_cal_test_split",
+    "seed": 42,
+    "ranking_rule": "max coverage among models holding the test risk target",
+    "n_feasible_by_risk": {
+      "0.01": 2,
+      "0.05": 3,
+      "0.1": 4
+    }
+  }
+}

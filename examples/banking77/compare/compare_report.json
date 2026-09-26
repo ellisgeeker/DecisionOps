@@ -1,0 +1,251 @@
+{
+  "dataset": "banking77",
+  "split": {
+    "seed": 42,
+    "cal_ratio": 0.3,
+    "n_total": 3076,
+    "n_calibration": 923,
+    "n_test": 2153
+  },
+  "target_risks": [
+    0.01,
+    0.05,
+    0.1
+  ],
+  "entries": [
+    {
+      "name": "char_lr",
+      "provider": "sklearn",
+      "model": "tfidf_char_lr",
+      "n_test": 2153,
+      "accuracy": 0.8964235949837436,
+      "ece_raw": 0.25614144526889027,
+      "ece_calibrated": 0.020558276983056907,
+      "brier_raw": 0.2565756724531604,
+      "brier_calibrated": 0.16281478326731585,
+      "nll_raw": 0.6979257530306289,
+      "nll_calibrated": 0.4144471762666359,
+      "temperature": 0.4664349517582021,
+      "coverage_by_risk": {
+        "0.01": 0.7329307942405945,
+        "0.05": 0.9182535996284255,
+        "0.1": 0.9437993497445425
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.016476552598225558,
+        "0.05": 0.06828528072837636,
+        "0.1": 0.07677165354330706
+      },
+      "threshold_by_risk": {
+        "0.01": 0.91,
+        "0.05": 0.57,
+        "0.1": 0.5
+      },
+      "n_crc_calibration": 738,
+      "n_temperature_fit": 185,
+      "certified_feasible_by_risk": {
+        "0.01": true,
+        "0.05": true,
+        "0.1": true
+      },
+      "certified_threshold_by_risk": {
+        "0.01": 0.856372501217629,
+        "0.05": 0.5457338243834169,
+        "0.1": 0.11836476973257212
+      },
+      "certified_coverage_by_risk": {
+        "0.01": 0.7552252670692058,
+        "0.05": 0.915466790524849,
+        "0.1": 1.0
+      },
+      "certified_joint_error_by_risk": {
+        "0.01": 0.014862981885740827,
+        "0.05": 0.06270320483046911,
+        "0.1": 0.10357640501625638
+      },
+      "latency_p95_ms": 0.034,
+      "verdict": "go"
+    },
+    {
+      "name": "word_lr",
+      "provider": "sklearn",
+      "model": "tfidf_word_lr",
+      "n_test": 2153,
+      "accuracy": 0.8504412447747329,
+      "ece_raw": 0.4315551573022931,
+      "ece_calibrated": 0.030286481177612255,
+      "brier_raw": 0.44355612693634,
+      "brier_calibrated": 0.20810382619624165,
+      "nll_raw": 1.223663238593332,
+      "nll_calibrated": 0.540587107218485,
+      "temperature": 0.3395037326581275,
+      "coverage_by_risk": {
+        "0.01": 0.48118903855085926,
+        "0.05": 0.8309335810496981,
+        "0.1": 0.9187180678123549
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.008687258687258725,
+        "0.05": 0.060368921185019575,
+        "0.1": 0.10111223458038421
+      },
+      "threshold_by_risk": {
+        "0.01": 0.99,
+        "0.05": 0.69,
+        "0.1": 0.5
+      },
+      "n_crc_calibration": 738,
+      "n_temperature_fit": 185,
+      "certified_feasible_by_risk": {
+        "0.01": true,
+        "0.05": true,
+        "0.1": true
+      },
+      "certified_threshold_by_risk": {
+        "0.01": 0.9445538622838736,
+        "0.05": 0.6028940080093595,
+        "0.1": 0.21141615334300198
+      },
+      "certified_coverage_by_risk": {
+        "0.01": 0.6163492800743149,
+        "0.05": 0.8578727357176034,
+        "0.1": 0.9888527635856944
+      },
+      "certified_joint_error_by_risk": {
+        "0.01": 0.013469577333952624,
+        "0.05": 0.06084533209475151,
+        "0.1": 0.14119832791453785
+      },
+      "latency_p95_ms": 0.009,
+      "verdict": "go"
+    },
+    {
+      "name": "svm_sig",
+      "provider": "sklearn",
+      "model": "tfidf_svm_sigmoid",
+      "n_test": 2153,
+      "accuracy": 0.8773803994426381,
+      "ece_raw": 0.12279973921044524,
+      "ece_calibrated": 0.017039756875769065,
+      "brier_raw": 0.19881369188218756,
+      "brier_calibrated": 0.18239509407350882,
+      "nll_raw": 0.5310793550614457,
+      "nll_calibrated": 0.4581634234145433,
+      "temperature": 0.6355197082962384,
+      "coverage_by_risk": {
+        "0.01": 0.683697166744078,
+        "0.05": 0.8903855085926614,
+        "0.1": 0.9581978634463539
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.017663043478260865,
+        "0.05": 0.06781429316640586,
+        "0.1": 0.0964614638875424
+      },
+      "threshold_by_risk": {
+        "0.01": 0.92,
+        "0.05": 0.64,
+        "0.1": 0.5
+      },
+      "n_crc_calibration": 738,
+      "n_temperature_fit": 185,
+      "certified_feasible_by_risk": {
+        "0.01": true,
+        "0.05": true,
+        "0.1": true
+      },
+      "certified_threshold_by_risk": {
+        "0.01": 0.8178356613173717,
+        "0.05": 0.582146498044641,
+        "0.1": 0.1781713011467697
+      },
+      "certified_coverage_by_risk": {
+        "0.01": 0.7663725034835114,
+        "0.05": 0.9052484904784023,
+        "0.1": 0.9990710636321412
+      },
+      "certified_joint_error_by_risk": {
+        "0.01": 0.025545750116117046,
+        "0.05": 0.06781235485369252,
+        "0.1": 0.12169066418950301
+      },
+      "latency_p95_ms": 0.015,
+      "verdict": "go"
+    },
+    {
+      "name": "cnb",
+      "provider": "sklearn",
+      "model": "tfidf_cnb",
+      "n_test": 2153,
+      "accuracy": 0.6832326985601487,
+      "ece_raw": 0.6417060715855619,
+      "ece_calibrated": 0.13103764385653244,
+      "brier_raw": 0.9363305401161902,
+      "brier_calibrated": 0.4852761181406422,
+      "nll_raw": 3.6202740085666734,
+      "nll_calibrated": 1.5141552408826444,
+      "temperature": 0.07132238166530797,
+      "coverage_by_risk": {
+        "0.01": 0.02786809103576405,
+        "0.05": 0.02786809103576405,
+        "0.1": 0.4338132837900604
+      },
+      "selective_risk_by_risk": {
+        "0.01": 0.0,
+        "0.05": 0.0,
+        "0.1": 0.1134903640256959
+      },
+      "threshold_by_risk": {
+        "0.01": 1.0,
+        "0.05": 1.0,
+        "0.1": 0.93
+      },
+      "n_crc_calibration": 738,
+      "n_temperature_fit": 185,
+      "certified_feasible_by_risk": {
+        "0.01": true,
+        "0.05": true,
+        "0.1": true
+      },
+      "certified_threshold_by_risk": {
+        "0.01": 0.998947339396153,
+        "0.05": 0.8421141139272709,
+        "0.1": 0.4767162003395264
+      },
+      "certified_coverage_by_risk": {
+        "0.01": 0.2772875058058523,
+        "0.05": 0.4509986065954482,
+        "0.1": 0.6228518346493265
+      },
+      "certified_joint_error_by_risk": {
+        "0.01": 0.012540640966093822,
+        "0.05": 0.0543427775197399,
+        "0.1": 0.11518810961449141
+      },
+      "latency_p95_ms": 0.005,
+      "verdict": "watch"
+    }
+  ],
+  "best_by_coverage_at": {
+    "0.01": "svm_sig",
+    "0.05": "char_lr",
+    "0.1": "char_lr"
+  },
+  "notes": [
+    "Ranking uses CRC certificates (joint automated error rate), not empirical selective risk. Empirical figures stay in the report for contrast and are marked ! when they rebound on test.",
+    "CRC certifies E[loss] <= alpha under exchangeability. A single test split landing above alpha is expected roughly half the time and does not void the certificate."
+  ],
+  "metadata": {
+    "protocol": "shared_split_gate_and_crc",
+    "seed": 42,
+    "temp_ratio": 0.2,
+    "n_crc_calibration": 738,
+    "ranking_rule": "max certified test coverage among models with a feasible CRC certificate (joint automated error rate)",
+    "n_feasible_by_risk": {
+      "0.01": 4,
+      "0.05": 4,
+      "0.1": 4
+    },
+    "certified_quantity": "joint_automated_error_rate"
+  }
+}

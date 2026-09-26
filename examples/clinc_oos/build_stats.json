@@ -1,0 +1,10 @@
+{
+  "pack": "clinc_oos_plus",
+  "n_eval": 8600,
+  "n_classes": 151,
+  "n_train_fit": 15250,
+  "accuracy_eval": 0.8280232558139535,
+  "mean_max_prob": 0.39704164510172,
+  "out_dir": "examples/clinc_oos",
+  "protocol": "fit_train_export_heldout"
+}

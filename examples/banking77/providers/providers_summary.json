@@ -1,0 +1,38 @@
+[
+  {
+    "name": "tfidf_word_lr",
+    "fit_seconds": 2.81,
+    "infer_ms_per_row": 0.009,
+    "accuracy_eval_pool": 0.8602,
+    "mean_max_prob": 0.42,
+    "rows": 3076,
+    "path": "examples/banking77/providers/tfidf_word_lr.jsonl"
+  },
+  {
+    "name": "tfidf_char_lr",
+    "fit_seconds": 5.26,
+    "infer_ms_per_row": 0.034,
+    "accuracy_eval_pool": 0.8992,
+    "mean_max_prob": 0.6414,
+    "rows": 3076,
+    "path": "examples/banking77/providers/tfidf_char_lr.jsonl"
+  },
+  {
+    "name": "tfidf_svm_sigmoid",
+    "fit_seconds": 0.99,
+    "infer_ms_per_row": 0.015,
+    "accuracy_eval_pool": 0.8872,
+    "mean_max_prob": 0.7575,
+    "rows": 3076,
+    "path": "examples/banking77/providers/tfidf_svm_sigmoid.jsonl"
+  },
+  {
+    "name": "tfidf_cnb",
+    "fit_seconds": 0.06,
+    "infer_ms_per_row": 0.005,
+    "accuracy_eval_pool": 0.6886,
+    "mean_max_prob": 0.0414,
+    "rows": 3076,
+    "path": "examples/banking77/providers/tfidf_cnb.jsonl"
+  }
+]

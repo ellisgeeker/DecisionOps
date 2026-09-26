@@ -1,0 +1,346 @@
+{
+  "split": {
+    "seed": 42,
+    "cal_ratio": 0.3,
+    "n_total": 3076,
+    "n_calibration": 923,
+    "n_test": 2153
+  },
+  "provider": "laya",
+  "model": "rl-agent",
+  "target_risks": [
+    0.01,
+    0.05,
+    0.1
+  ],
+  "n_bins": 10,
+  "temperature": 6.554840721700686,
+  "temperature_fit": {
+    "temperature": 6.554840721700686,
+    "n_calibration": 923,
+    "nll_before": 14.034359718844778,
+    "nll_after": 3.0207613422455406
+  },
+  "conditions": [
+    {
+      "name": "raw",
+      "temperature": null,
+      "n_samples": 2153,
+      "accuracy": 0.37482582443102647,
+      "ece": 0.6025789398448053,
+      "brier": 1.2212762728844242,
+      "nll": 15.041782472036656,
+      "thresholds": [
+        {
+          "target_risk": 0.01,
+          "threshold": 1.0,
+          "coverage": 0.41244774732930795,
+          "selective_accuracy": 0.5529279279279279,
+          "selective_risk": 0.4470720720720721,
+          "n_accepted": 888,
+          "n_total": 2153
+        },
+        {
+          "target_risk": 0.05,
+          "threshold": 1.0,
+          "coverage": 0.41244774732930795,
+          "selective_accuracy": 0.5529279279279279,
+          "selective_risk": 0.4470720720720721,
+          "n_accepted": 888,
+          "n_total": 2153
+        },
+        {
+          "target_risk": 0.1,
+          "threshold": 1.0,
+          "coverage": 0.41244774732930795,
+          "selective_accuracy": 0.5529279279279279,
+          "selective_risk": 0.4470720720720721,
+          "n_accepted": 888,
+          "n_total": 2153
+        }
+      ],
+      "cal_thresholds": [
+        {
+          "target_risk": 0.01,
+          "threshold": 1.0,
+          "coverage": 0.41278439869989164,
+          "selective_accuracy": 0.5905511811023622,
+          "selective_risk": 0.40944881889763785,
+          "n_accepted": 381,
+          "n_total": 923
+        },
+        {
+          "target_risk": 0.05,
+          "threshold": 1.0,
+          "coverage": 0.41278439869989164,
+          "selective_accuracy": 0.5905511811023622,
+          "selective_risk": 0.40944881889763785,
+          "n_accepted": 381,
+          "n_total": 923
+        },
+        {
+          "target_risk": 0.1,
+          "threshold": 1.0,
+          "coverage": 0.41278439869989164,
+          "selective_accuracy": 0.5905511811023622,
+          "selective_risk": 0.40944881889763785,
+          "n_accepted": 381,
+          "n_total": 923
+        }
+      ],
+      "reliability_bins": [
+        {
+          "bin_low": 0.0,
+          "bin_high": 0.1,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        },
+        {
+          "bin_low": 0.1,
+          "bin_high": 0.2,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        },
+        {
+          "bin_low": 0.2,
+          "bin_high": 0.30000000000000004,
+          "count": 2,
+          "avg_confidence": 0.2745603954749761,
+          "accuracy": 0.0,
+          "gap": 0.2745603954749761
+        },
+        {
+          "bin_low": 0.30000000000000004,
+          "bin_high": 0.4,
+          "count": 4,
+          "avg_confidence": 0.35505174344159196,
+          "accuracy": 0.0,
+          "gap": 0.35505174344159196
+        },
+        {
+          "bin_low": 0.4,
+          "bin_high": 0.5,
+          "count": 5,
+          "avg_confidence": 0.46287106336588807,
+          "accuracy": 0.0,
+          "gap": 0.46287106336588807
+        },
+        {
+          "bin_low": 0.5,
+          "bin_high": 0.6000000000000001,
+          "count": 30,
+          "avg_confidence": 0.5525011842558224,
+          "accuracy": 0.3333333333333333,
+          "gap": 0.21916785092248908
+        },
+        {
+          "bin_low": 0.6000000000000001,
+          "bin_high": 0.7000000000000001,
+          "count": 22,
+          "avg_confidence": 0.6570762072429304,
+          "accuracy": 0.13636363636363635,
+          "gap": 0.520712570879294
+        },
+        {
+          "bin_low": 0.7000000000000001,
+          "bin_high": 0.8,
+          "count": 35,
+          "avg_confidence": 0.7524186310076563,
+          "accuracy": 0.22857142857142856,
+          "gap": 0.5238472024362277
+        },
+        {
+          "bin_low": 0.8,
+          "bin_high": 0.9,
+          "count": 41,
+          "avg_confidence": 0.8579767464415518,
+          "accuracy": 0.21951219512195122,
+          "gap": 0.6384645513196006
+        },
+        {
+          "bin_low": 0.9,
+          "bin_high": 1.0,
+          "count": 2014,
+          "avg_confidence": 0.9967856820396868,
+          "accuracy": 0.3857994041708044,
+          "gap": 0.6109862778688824
+        }
+      ]
+    },
+    {
+      "name": "temperature_scaled",
+      "temperature": 6.554840721700686,
+      "n_samples": 2153,
+      "accuracy": 0.37482582443102647,
+      "ece": 0.05629250705858646,
+      "brier": 0.8392209520322983,
+      "nll": 3.1767040064992664,
+      "thresholds": [
+        {
+          "target_risk": 0.01,
+          "threshold": 1.0,
+          "coverage": 0.0,
+          "selective_accuracy": 0.0,
+          "selective_risk": 1.0,
+          "n_accepted": 0,
+          "n_total": 2153
+        },
+        {
+          "target_risk": 0.05,
+          "threshold": 1.0,
+          "coverage": 0.0,
+          "selective_accuracy": 0.0,
+          "selective_risk": 1.0,
+          "n_accepted": 0,
+          "n_total": 2153
+        },
+        {
+          "target_risk": 0.1,
+          "threshold": 1.0,
+          "coverage": 0.0,
+          "selective_accuracy": 0.0,
+          "selective_risk": 1.0,
+          "n_accepted": 0,
+          "n_total": 2153
+        }
+      ],
+      "cal_thresholds": [
+        {
+          "target_risk": 0.01,
+          "threshold": 1.0,
+          "coverage": 0.0,
+          "selective_accuracy": 0.0,
+          "selective_risk": 1.0,
+          "n_accepted": 0,
+          "n_total": 923
+        },
+        {
+          "target_risk": 0.05,
+          "threshold": 1.0,
+          "coverage": 0.0,
+          "selective_accuracy": 0.0,
+          "selective_risk": 1.0,
+          "n_accepted": 0,
+          "n_total": 923
+        },
+        {
+          "target_risk": 0.1,
+          "threshold": 1.0,
+          "coverage": 0.0,
+          "selective_accuracy": 0.0,
+          "selective_risk": 1.0,
+          "n_accepted": 0,
+          "n_total": 923
+        }
+      ],
+      "reliability_bins": [
+        {
+          "bin_low": 0.0,
+          "bin_high": 0.1,
+          "count": 31,
+          "avg_confidence": 0.0677441948821048,
+          "accuracy": 0.1935483870967742,
+          "gap": 0.12580419221466937
+        },
+        {
+          "bin_low": 0.1,
+          "bin_high": 0.2,
+          "count": 56,
+          "avg_confidence": 0.15092125893719036,
+          "accuracy": 0.125,
+          "gap": 0.025921258937190356
+        },
+        {
+          "bin_low": 0.2,
+          "bin_high": 0.30000000000000004,
+          "count": 104,
+          "avg_confidence": 0.2627541603286253,
+          "accuracy": 0.1346153846153846,
+          "gap": 0.1281387757132407
+        },
+        {
+          "bin_low": 0.30000000000000004,
+          "bin_high": 0.4,
+          "count": 251,
+          "avg_confidence": 0.3538403098993621,
+          "accuracy": 0.23904382470119523,
+          "gap": 0.11479648519816688
+        },
+        {
+          "bin_low": 0.4,
+          "bin_high": 0.5,
+          "count": 1711,
+          "avg_confidence": 0.4638842178720528,
+          "accuracy": 0.4208065458796026,
+          "gap": 0.04307767199245022
+        },
+        {
+          "bin_low": 0.5,
+          "bin_high": 0.6000000000000001,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        },
+        {
+          "bin_low": 0.6000000000000001,
+          "bin_high": 0.7000000000000001,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        },
+        {
+          "bin_low": 0.7000000000000001,
+          "bin_high": 0.8,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        },
+        {
+          "bin_low": 0.8,
+          "bin_high": 0.9,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        },
+        {
+          "bin_low": 0.9,
+          "bin_high": 1.0,
+          "count": 0,
+          "avg_confidence": null,
+          "accuracy": null,
+          "gap": null
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "ece_improved": true,
+    "ece_relative_drop": 0.9065806928581264,
+    "coverage_at_1pct": 0.0,
+    "coverage_at_5pct": 0.0,
+    "coverage_in_band_1pct": false,
+    "notes": [
+      "ECE improved by 91% after temperature scaling.",
+      "@1% risk coverage is very low (0.0%); little room to automate."
+    ],
+    "recommendation": "watch"
+  },
+  "latency": {
+    "count": 3076,
+    "p50_ms": 1.252,
+    "p95_ms": 3.692,
+    "p99_ms": 5.451,
+    "mean_ms": 2.122319895968791
+  },
+  "metadata": {
+    "protocol": "cal_test_split"
+  }
+}

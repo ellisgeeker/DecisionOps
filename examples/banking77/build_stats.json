@@ -1,0 +1,10 @@
+{
+  "pack": "banking77",
+  "n_eval": 3076,
+  "n_classes": 77,
+  "n_train_fit": 9993,
+  "accuracy_eval": 0.8602080624187256,
+  "mean_max_prob": 0.4199524085820432,
+  "out_dir": "examples/banking77",
+  "protocol": "fit_train_export_heldout"
+}
