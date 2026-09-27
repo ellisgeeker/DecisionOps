@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DecisionOps Comparison</title>
+<style>
+    :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #5c5c5c; --bg: #f7f7f4; --card: #fff; --line: #222; --accent: #0b57d0; --warn: #a15c00; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #eee; --muted: #aaa; --bg: #161616; --card: #1e1e1e; --line: #ddd; --accent: #8ab4f8; --warn: #f5c16c; }
+    }
+    body { margin: 0 auto; max-width: 960px; padding: 24px 20px 64px; font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+    .sub, .hint, figcaption { color: var(--muted); }
+    .hint { font-size: 0.85rem; margin: 4px 0 0; }
+    table { border-collapse: collapse; width: 100%; background: var(--card); }
+    th, td { border-bottom: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); padding: 6px 10px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+    figure { margin: 0; background: var(--card); padding: 8px 8px 12px; }
+    svg { width: 100%; height: auto; }
+    svg line, svg polyline { stroke: var(--line); fill: none; stroke-width: 1; }
+    svg .diag { stroke-dasharray: 4 4; opacity: 0.6; }
+    svg .curve { stroke: var(--accent); stroke-width: 2; }
+    svg .target { stroke: var(--warn); stroke-dasharray: 3 3; }
+    svg .target-label { fill: var(--warn); font-size: 10px; }
+    svg .dot { fill: var(--accent); fill-opacity: 0.75; stroke: none; }
+    svg .dot-sm { fill: var(--accent); }
+    svg text { fill: var(--muted); font-size: 10px; }
+    svg .plot-bg { fill: transparent; stroke: none; }
+    .verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+    .verdict.go { background: #d1f0d5; color: #0d5c1f; }
+    .verdict.watch { background: #ffe7c2; color: #7a4b00; }
+    .verdict.no-go { background: #ffd5d5; color: #8b1212; }
+    ul.notes { padding-left: 18px; }
+    </style>
+</head>
+<body>
+
+        <h1>DecisionOps comparison</h1>
+        <p class="sub">dataset=b77_jev500 n_test=350
+          seed=42. Ranking uses CRC certificates
+          (joint automated error rate).</p>
+        <table>
+          <thead><tr><th>Model</th><th>Acc</th><th>ECE cal</th><th>@5% cert. cov</th><th>@10% cert. cov</th></tr></thead>
+          <tbody><tr><td>jev</td><td>0.7771</td><td>0.0920</td><td>67.1%</td><td>79.4%</td></tr><tr><td>laya</td><td>0.3743</td><td>0.0515</td><td>infeasible</td><td>infeasible</td></tr><tr><td>laya_rawT</td><td>0.3743</td><td>0.1234</td><td>6.0%</td><td>14.0%</td></tr><tr><td>char_lr</td><td>0.9114</td><td>0.0335</td><td>86.9%</td><td>98.3%</td></tr><tr><td>word_lr</td><td>0.8857</td><td>0.0190</td><td>85.4%</td><td>96.3%</td></tr><tr><td>svm_sig</td><td>0.9029</td><td>0.0343</td><td>87.7%</td><td>95.1%</td></tr></tbody>
+        </table>
+        <h2>Winners</h2>
+        <ul><li>@5%: svm_sig</li><li>@10%: char_lr</li></ul>
+        <ul class="notes"><li>Ranking uses CRC certificates (joint automated error rate), not empirical selective risk. Empirical figures stay in the report for contrast and are marked ! when they rebound on test.</li><li>CRC certifies E[loss] &lt;= alpha under exchangeability. A single test split landing above alpha is expected roughly half the time and does not void the certificate.</li><li>@5%: 1 of 6 infeasible (laya) — no certificate, excluded from ranking.</li><li>@10%: 1 of 6 infeasible (laya) — no certificate, excluded from ranking.</li></ul>
+        
+</body>
+</html>

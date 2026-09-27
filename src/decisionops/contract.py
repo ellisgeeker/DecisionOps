@@ -19,6 +19,7 @@ tool-call confirmation are all expressed with the same schema.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -101,6 +102,7 @@ class DecisionContract(BaseModel):
         """Compact form for report metadata."""
         return {
             "name": self.name,
+            "choices": list(self.choices),
             "auto_choices": list(self.auto_choices),
             "escalate_choices": self.escalate_choices,
             "costs": dict(self.costs),
@@ -109,6 +111,25 @@ class DecisionContract(BaseModel):
             "instructions": self.instructions,
             "yes_choice": self.yes_choice,
         }
+
+    def fingerprint(self) -> str:
+        """
+        SHA-256 over every field a certificate depends on.
+
+        Covers the choice set, the auto/escalate split, and the model input
+        (descriptions, instructions, yes_choice). Costs, name and description are
+        excluded: they price or label decisions but change neither what the model
+        sees nor which errors count as risk.
+        """
+        payload = {
+            "choices": list(self.choices),
+            "auto_choices": sorted(self.auto_choices),
+            "descriptions": dict(sorted(self.descriptions.items())),
+            "instructions": self.instructions,
+            "yes_choice": self.yes_choice,
+        }
+        blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
     def validate_data(
         self,

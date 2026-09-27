@@ -7,10 +7,11 @@ import math
 from pathlib import Path
 from typing import Any
 
+from decisionops.cascade import CascadeReport
 from decisionops.conformal.certify import CertificationReport
 from decisionops.schemas import ComparisonReport, EvalResult, GateReport
 
-Report = EvalResult | GateReport | ComparisonReport | CertificationReport
+Report = EvalResult | GateReport | ComparisonReport | CertificationReport | CascadeReport
 
 _W = 440
 _H = 320
@@ -156,6 +157,84 @@ def risk_coverage_svg(
       <p class="hint">More automation is to the right. Higher error is up. Empirical, not CRC.</p>
     </figure>
     """
+
+
+def cost_miss_svg(
+    points: list[dict[str, Any]],
+    *,
+    title: str,
+    baseline_mean_cost: float | None = None,
+) -> str:
+    """Scatter/line of cost_saved (x) vs miss_rate (y)."""
+    usable = [
+        p
+        for p in points
+        if math.isfinite(float(p.get("cost_saved", float("nan"))))
+        and math.isfinite(float(p.get("miss_rate", float("nan"))))
+    ]
+    usable.sort(key=lambda p: float(p["cost_saved"]))
+    if not usable:
+        return f"<figure><figcaption>{_esc(title)}</figcaption><p class=\"hint\">No points.</p></figure>"
+
+    xs = [float(p["cost_saved"]) for p in usable]
+    ys = [float(p["miss_rate"]) for p in usable]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = 0.0, max(ys) if max(ys) > 0 else 0.01
+    if abs(x_max - x_min) < 1e-12:
+        x_min -= 0.5
+        x_max += 0.5
+    if abs(y_max - y_min) < 1e-12:
+        y_max = y_min + 0.01
+
+    def xy(x: float, y: float) -> tuple[float, float]:
+        px = _PAD_L + (x - x_min) / (x_max - x_min) * (_W - _PAD_L - _PAD_R)
+        py = _PAD_T + (1.0 - (y - y_min) / (y_max - y_min)) * (_H - _PAD_T - _PAD_B)
+        return px, py
+
+    path = []
+    dots = []
+    for p in usable:
+        px, py = xy(float(p["cost_saved"]), float(p["miss_rate"]))
+        path.append(f"{px:.1f},{py:.1f}")
+        dots.append(
+            f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.4" class="dot-sm">'
+            f"<title>t={float(p['threshold']):.2f} auto={float(p['automation_rate']):.1%} "
+            f"miss={float(p['miss_rate']):.4f} saved={float(p['cost_saved']):.3f}</title></circle>"
+        )
+    poly = ""
+    if len(path) >= 2:
+        poly = f'<polyline points="{" ".join(path)}" class="curve" />'
+
+    # axes labels (manual, since _axes assumes 0..1)
+    axes = (
+        f'<rect x="{_PAD_L}" y="{_PAD_T}" width="{_W - _PAD_L - _PAD_R}" '
+        f'height="{_H - _PAD_T - _PAD_B}" class="plot-bg" />'
+        f'<line x1="{_PAD_L}" y1="{_H - _PAD_B}" x2="{_W - _PAD_R}" y2="{_H - _PAD_B}" />'
+        f'<line x1="{_PAD_L}" y1="{_PAD_T}" x2="{_PAD_L}" y2="{_H - _PAD_B}" />'
+        f'<text x="{(_PAD_L + _W - _PAD_R) / 2:.1f}" y="{_H - 8}" text-anchor="middle">'
+        f"cost saved vs always-escalate</text>"
+        f'<text x="12" y="{(_PAD_T + _H - _PAD_B) / 2:.1f}" text-anchor="middle" '
+        f'transform="rotate(-90 12,{(_PAD_T + _H - _PAD_B) / 2:.1f})">miss rate (joint)</text>'
+        f'<text x="{_PAD_L}" y="{_H - _PAD_B + 14}" text-anchor="start">{x_min:.2f}</text>'
+        f'<text x="{_W - _PAD_R}" y="{_H - _PAD_B + 14}" text-anchor="end">{x_max:.2f}</text>'
+        f'<text x="{_PAD_L - 4}" y="{_H - _PAD_B}" text-anchor="end">{y_min:.2f}</text>'
+        f'<text x="{_PAD_L - 4}" y="{_PAD_T + 8}" text-anchor="end">{y_max:.2f}</text>'
+    )
+    hint = "More savings to the right. Higher automated miss rate is up. Empirical, oracle escalate."
+    if baseline_mean_cost is not None:
+        hint += f" Baseline escalate mean={baseline_mean_cost:.3f}."
+    return f"""
+    <figure>
+      <figcaption>{_esc(title)}</figcaption>
+      <svg viewBox="0 0 {_W} {_H}" role="img" aria-label="{_esc(title)}">
+        {axes}
+        {poly}
+        {"".join(dots)}
+      </svg>
+      <p class="hint">{_esc(hint)}</p>
+    </figure>
+    """
+
 
 
 def _css() -> str:
@@ -421,6 +500,83 @@ def _compare_html(report: ComparisonReport) -> str:
     )
 
 
+def _cascade_html(report: CascadeReport) -> str:
+    points = [p.model_dump(mode="json") for p in report.curve]
+    chart = cost_miss_svg(
+        points,
+        title="Cost saved vs miss rate (test)",
+        baseline_mean_cost=report.baseline_mean_cost,
+    )
+    # Sparse table rows
+    n = len(report.curve)
+    keep = {0, n - 1} if n else set()
+    for i, p in enumerate(report.curve):
+        hundredths = int(round(p.threshold * 100))
+        on_grid = abs(p.threshold * 100 - hundredths) < 1e-9
+        if on_grid and hundredths % 5 == 0:
+            keep.add(i)
+        if n and i % max(1, n // 12) == 0:
+            keep.add(i)
+    rows = []
+    for i in sorted(keep):
+        p = report.curve[i]
+        sel = "—" if p.selective_risk is None else _fmt(p.selective_risk)
+        frac = "—" if p.cost_saved_frac is None else _pct(p.cost_saved_frac)
+        rows.append(
+            "<tr>"
+            f"<td>{_fmt(p.threshold, 2)}</td>"
+            f"<td>{_pct(p.automation_rate)}</td>"
+            f"<td>{_fmt(p.miss_rate)}</td>"
+            f"<td>{sel}</td>"
+            f"<td>{_fmt(p.mean_cost)}</td>"
+            f"<td>{_fmt(p.cost_saved)}</td>"
+            f"<td>{frac}</td>"
+            f"<td>{p.n_auto}/{p.n_total}</td>"
+            "</tr>"
+        )
+    notes = "".join(f"<li>{_esc(n)}</li>" for n in report.notes)
+    who = " ".join(
+        part
+        for part in (
+            f"provider={report.provider}" if report.provider else "",
+            f"model={report.model}" if report.model else "",
+        )
+        if part
+    )
+    cname = _esc(report.contract.get("name", "?"))
+    auto = _esc(report.contract.get("auto_choices", []))
+    esc = _esc(report.contract.get("escalate_choices", []))
+    return _page(
+        "DecisionOps Cascade",
+        f"""
+        <h1>DecisionOps cascade (cost vs miss rate)</h1>
+        <p class="sub">n_total={report.split.n_total}
+          n_cal={report.split.n_calibration}
+          n_test={report.split.n_test}
+          seed={report.split.seed}
+          {_esc(who)}</p>
+        <p class="sub">contract={cname} auto={auto} escalate={esc}.
+          Baseline always-escalate mean={_fmt(report.baseline_mean_cost)};
+          always-auto mean={_fmt(report.always_auto_mean_cost)},
+          miss={_fmt(report.always_auto_miss_rate)}.</p>
+        <p class="hint">Escalation pricing is oracle. Thresholds are empirical —
+          use <code>decisionops certify</code> for a CRC bound on miss rate.</p>
+        <div class="charts">{chart}</div>
+        <h2>Operating points</h2>
+        <table>
+          <thead><tr>
+            <th>Threshold</th><th>Automation</th><th>Miss rate</th><th>Sel. risk</th>
+            <th>Mean cost</th><th>Cost saved</th><th>Saved %</th><th>Auto / N</th>
+          </tr></thead>
+          <tbody>{"".join(rows)}</tbody>
+        </table>
+        <h2>Notes</h2>
+        <ul class="notes">{notes}</ul>
+        """,
+    )
+
+
+
 def _render(result: Report) -> str:
     if isinstance(result, GateReport):
         return _gate_html(result)
@@ -430,4 +586,6 @@ def _render(result: Report) -> str:
         return _cert_html(result)
     if isinstance(result, ComparisonReport):
         return _compare_html(result)
+    if isinstance(result, CascadeReport):
+        return _cascade_html(result)
     raise TypeError(f"unsupported report type: {type(result)!r}")

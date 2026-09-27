@@ -1,0 +1,15 @@
+{
+  "pack": "banking77",
+  "n": 500,
+  "model_requested": "jev-latest",
+  "models_served": [
+    "jev-1.13.0"
+  ],
+  "accuracy": 0.794,
+  "mean_max_prob": 0.8781,
+  "contract": null,
+  "seconds_total": 115.4,
+  "ms_per_case": 230.7,
+  "predictions": "examples/banking77/providers/jev.jsonl",
+  "dataset_subset": "examples/banking77/providers/jev_dataset.jsonl"
+}

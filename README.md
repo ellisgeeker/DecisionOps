@@ -59,8 +59,12 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | 5b `certify` CLI command | done |
 | 5c HTML report (reliability + risk-coverage) | done |
 | M0 git / Apache-2.0 / CI + 85% coverage gate | done |
-| 4b OpenAI-compatible adapter (DeepSeek etc.) | next |
-| 6+ Cascade / gateway | later |
+| Decision contract + asymmetric risk (`--contract`) | done |
+| Offline cascade / cost simulation (`cascade`) | done |
+| Certified profile + runtime `decide()` (`certify --profile`, `decide`) | done |
+| Code review example pack | next |
+| Generic HTTP decision provider | later |
+| Thin gate (GitHub Action, then `POST /v1/decision`) | later |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
 

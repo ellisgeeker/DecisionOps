@@ -1,21 +1,32 @@
-"""CLI entrypoint: decisionops eval | gate | compare | certify ..."""
+"""CLI entrypoint: decisionops eval | gate | compare | certify | cascade | decide ..."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from decisionops import __version__
 from decisionops.adapters import StaticFileProvider
+from decisionops.cascade import run_cascade
 from decisionops.compare import compare_models, load_prediction_sets
 from decisionops.conformal.certify import run_certification
 from decisionops.contract import DecisionContract, load_contract
+from decisionops.decide import (
+    ProfileMismatchError,
+    decide_many,
+    load_profile,
+    profile_from_report,
+    save_profile,
+)
 from decisionops.eval import evaluate, run_gate
-from decisionops.io import load_dataset
+from decisionops.io import load_dataset, load_predictions
 from decisionops.report import (
+    print_cascade_report,
     print_certification_report,
     print_comparison_report,
     print_eval_report,
@@ -25,6 +36,7 @@ from decisionops.report import (
 )
 
 if TYPE_CHECKING:
+    from decisionops.cascade import CascadeReport
     from decisionops.conformal.certify import CertificationReport
     from decisionops.schemas import ComparisonReport, EvalResult, GateReport
 
@@ -227,7 +239,7 @@ def _load_cases_and_predictions(
 
 
 def _write_reports(
-    result: EvalResult | GateReport | ComparisonReport | CertificationReport,
+    result: EvalResult | GateReport | ComparisonReport | CertificationReport | CascadeReport,
     out_dir: Path,
     stem: str,
 ) -> None:
@@ -599,6 +611,22 @@ def certify_cmd(
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
     jev_question: JevQuestionOption = None,
+    profile: Annotated[
+        Path | None,
+        typer.Option(
+            "--profile",
+            help="Write a runtime CertificationProfile JSON for --profile-alpha.",
+            dir_okay=False,
+        ),
+    ] = None,
+    profile_alpha: Annotated[
+        float | None,
+        typer.Option(
+            "--profile-alpha",
+            help="Alpha to freeze into --profile (must be one of --alphas). "
+            "Defaults to the only alpha when exactly one is given.",
+        ),
+    ] = None,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -617,6 +645,15 @@ def certify_cmd(
         raise typer.BadParameter("--temp-ratio must be in [0, 1)")
 
     levels = _parse_risks(alphas)
+    if profile_alpha is not None and profile is None:
+        raise typer.BadParameter("--profile-alpha needs --profile")
+    if profile is not None and profile_alpha is None:
+        if len(levels) != 1:
+            raise typer.BadParameter("--profile with several --alphas needs --profile-alpha")
+        profile_alpha = levels[0]
+    if profile_alpha is not None and not any(abs(a - profile_alpha) < 1e-12 for a in levels):
+        raise typer.BadParameter(f"--profile-alpha {profile_alpha:g} is not in --alphas")
+
     decision_contract = _load_contract_option(contract)
     cases, preds = _load_cases_and_predictions(
         dataset,
@@ -647,6 +684,192 @@ def certify_cmd(
 
     if output is not None:
         _write_reports(report, output, "certification_report")
+
+    if profile is not None and profile_alpha is not None:
+        try:
+            frozen = profile_from_report(report, profile_alpha)
+        except ValueError as exc:
+            console.print(f"[red]No profile written:[/red] {escape(str(exc))}")
+            raise typer.Exit(code=1) from exc
+        path = save_profile(frozen, profile)
+        console.print(
+            f"[green]Wrote[/green] {path}  "
+            f"(alpha={frozen.alpha:g}, threshold={frozen.threshold:.4f}, "
+            f"profile={frozen.profile_hash})"
+        )
+
+
+@app.command("cascade")
+def cascade_cmd(
+    dataset: Annotated[
+        Path,
+        typer.Argument(help="Path to labeled dataset JSONL.", exists=True, dir_okay=False),
+    ],
+    contract: Annotated[
+        Path,
+        typer.Option(
+            "--contract",
+            help="Decision contract JSON with costs for every choice.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    predictions: Annotated[
+        Path | None,
+        typer.Option(
+            "--predictions",
+            "-p",
+            help="Precomputed predictions JSONL (implies --provider static).",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="Prediction source: static | laya | jev."),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Directory for JSON + HTML reports."),
+    ] = None,
+    model_dir: Annotated[
+        Path | None,
+        typer.Option("--model-dir", help="Local Laya snapshot (skips Hub download)."),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", help="Evaluate only the first N cases."),
+    ] = None,
+    cal_ratio: Annotated[
+        float,
+        typer.Option("--cal-ratio", help="Calibration fraction (curve scored on test)."),
+    ] = 0.3,
+    seed: Annotated[
+        int,
+        typer.Option("--seed", help="Random seed for the split."),
+    ] = 42,
+    no_builtin_temperature: NoBuiltinTemperatureOption = False,
+    jev_model: JevModelOption = None,
+    jev_base_url: JevBaseUrlOption = None,
+    jev_question: JevQuestionOption = None,
+) -> None:
+    """
+    Offline cascade: cost saved vs automated miss rate.
+
+    Needs a contract with costs. Escalation is priced with an oracle (true
+    escalate label, else cheapest escalate choice). Thresholds are empirical —
+    pair with `certify` for a CRC bound on the miss rate.
+    """
+    if not 0.0 < cal_ratio < 1.0:
+        raise typer.BadParameter("--cal-ratio must be in (0, 1)")
+
+    decision_contract = _load_contract_option(contract)
+    if decision_contract is None:
+        raise typer.BadParameter("--contract is required")
+    cases, preds = _load_cases_and_predictions(
+        dataset,
+        predictions=predictions,
+        provider_name=provider,
+        model_dir=model_dir,
+        limit=limit,
+        no_builtin_temperature=no_builtin_temperature,
+        jev_model=jev_model,
+        jev_base_url=jev_base_url,
+        jev_question=jev_question,
+        contract=decision_contract,
+    )
+    try:
+        report = run_cascade(
+            cases,
+            preds,
+            decision_contract,
+            cal_ratio=cal_ratio,
+            seed=seed,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    print_cascade_report(report, console=console)
+
+    if output is not None:
+        _write_reports(report, output, "cascade_report")
+
+
+@app.command("decide")
+def decide_cmd(
+    profile: Annotated[
+        Path,
+        typer.Argument(
+            help="CertificationProfile JSON from `certify --profile`.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    predictions: Annotated[
+        Path,
+        typer.Option(
+            "--predictions",
+            "-p",
+            help="Predictions JSONL to route (raw probabilities; T is applied here).",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    contract: Annotated[
+        Path | None,
+        typer.Option(
+            "--contract",
+            help="Contract in use now; rejected unless it matches the certified one.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write one Decision per line (JSONL)."),
+    ] = None,
+) -> None:
+    """
+    Route predictions with a certified profile: AUTO or ESCALATE.
+
+    AUTO only when the predicted choice is automatic and calibrated confidence
+    is at or above the certified threshold; everything else escalates. Offline
+    smoke for the runtime rule — the real consumer is the library `decide()`.
+    """
+    try:
+        frozen = load_profile(profile)
+        frozen.check_contract(_load_contract_option(contract))
+        decisions = decide_many(load_predictions(predictions), frozen)
+    except (ProfileMismatchError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    n = len(decisions)
+    n_auto = sum(d.action == "auto" for d in decisions)
+    by_reason: dict[str, int] = {}
+    for d in decisions:
+        by_reason[d.reason] = by_reason.get(d.reason, 0) + 1
+
+    console.print()
+    console.rule("[bold]DecisionOps Decide[/bold]")
+    console.print(
+        f"profile={frozen.profile_hash}  alpha={frozen.alpha:g}  "
+        f"threshold={frozen.threshold:.4f}  "
+        + (f"T={frozen.temperature:.4f}" if frozen.temperature is not None else "T=none")
+    )
+    if frozen.model or frozen.provider:
+        console.print(
+            (f"provider={frozen.provider}  " if frozen.provider else "")
+            + (f"model={frozen.model}" if frozen.model else "")
+        )
+    console.print(
+        f"n={n}  auto={n_auto} ({n_auto / n:.1%})  escalate={n - n_auto}  "
+        + "  ".join(f"{k}={v}" for k, v in sorted(by_reason.items()))
+    )
+
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        lines = [json.dumps(d.model_dump(mode="json"), ensure_ascii=False) for d in decisions]
+        output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        console.print(f"[green]Wrote[/green] {output}")
 
 
 if __name__ == "__main__":

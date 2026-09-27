@@ -1,0 +1,15 @@
+{
+  "pack": "toy",
+  "n": 20,
+  "model_requested": "jev-latest",
+  "models_served": [
+    "jev-1.13.0"
+  ],
+  "accuracy": 1.0,
+  "mean_max_prob": 0.9885,
+  "contract": null,
+  "seconds_total": 7.6,
+  "ms_per_case": 379.1,
+  "predictions": "examples/toy-routing/providers/jev.jsonl",
+  "dataset_subset": "examples/toy-routing/providers/jev_dataset.jsonl"
+}

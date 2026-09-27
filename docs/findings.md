@@ -1,6 +1,6 @@
 # Findings
 
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-27
 
 Measured results, with the protocol and limits of each. Numbers here came from
 runs on public benchmarks; nothing is synthetic unless labelled so.
@@ -12,7 +12,7 @@ runs on public benchmarks; nothing is synthetic unless labelled so.
 | | |
 |---|---|
 | Datasets | BANKING77 (`mteb/banking77`, 3076 held-out rows, 77 classes), CLINC OOS `plus` (`clinc/clinc_oos`, 8600 held-out rows, 151 classes) |
-| Models | Laya `convaiinnovations/laya` (zero-shot) + 4 sklearn heads |
+| Models | Laya `convaiinnovations/laya` (zero-shot) + TypeSafe Jev `jev-1.13.0` (hosted, zero-shot) + 4 sklearn heads |
 | Protocol | Classifier fit on the HF **train** split; only **held-out** rows exported. DecisionOps then splits that pool into calibration / test (seed 42, `cal_ratio=0.3`). Temperature and thresholds come from calibration; all reported metrics come from test. |
 | Hardware | Apple Silicon, MPS. Laya ≈98ms/case. |
 
@@ -291,12 +291,103 @@ uv run decisionops compare examples/banking77/dataset.jsonl \
 
 ---
 
+## 8. Jev sits between Laya and a trained head — on the same 500 cases
+
+Toy routing (20 cases, accuracy 1.0) said nothing about calibration. A live
+BANKING77 export does.
+
+500 held-out rows, same ids for every model (`scripts/export_jev_predictions.py
+--pack banking77 --limit 500 --seed 42`, then the matching rows from the existing
+Laya / sklearn JSONL). Jev is `jev-1.13.0` via `jev-latest`, zero-shot, 77
+options per call. Sklearn heads were fit on the HF **train** split; Jev and Laya
+were not.
+
+Pool accuracy on those 500: Jev **0.794**, mean max-prob 0.878, 231 ms/case
+(~1023 in / 828 out tokens). 103 wrong; 18 of those had confidence ≥ 0.9.
+Most common confusion: `get_physical_card` → `change_pin` (10×).
+
+Shared DecisionOps split on that pool (seed 42, `n_cal=150`, `n_test=350`,
+`n_crc_cal=120`). 1% is omitted: 120 calibration samples is only just above the
+CRC floor of 99, so a 1% certificate would be almost all penalty.
+
+| Model | Acc (test) | ECE raw | ECE cal | @5% CRC cov | @10% CRC cov |
+|---|---|---|---|---|---|
+| svm_sig | 0.903 | 0.148 | 0.034 | **87.7%** | 95.1% |
+| char_lr | **0.911** | 0.257 | 0.034 | 86.9% | **98.3%** |
+| word_lr | 0.886 | 0.459 | **0.019** | 85.4% | 96.3% |
+| **jev** | **0.777** | **0.094** | 0.092 | **67.1%** | **79.4%** |
+| laya_rawT | 0.374 | 0.374 | 0.123 | 6.0% | 14.0% |
+| laya | 0.374 | 0.607 | 0.052 | infeasible | infeasible |
+
+Three things this table is for:
+
+1. **Jev is already close to calibrated.** Temperature moves ECE 0.094 → 0.092
+   (`T=3.24`). NLL still drops (2.32 → 1.12), so the scalar is doing work, but
+   there is no Laya-style "shipped T made it worse" story. Laya on the same 350
+   still needs `T≈6.6` to cut ECE from 0.61 to 0.05 — and still cannot hold a
+   5% certificate on this split.
+2. **Accuracy is not the certificate.** Jev at 77.7% automates two-thirds of
+   traffic at a 5% joint-error budget. Laya at 37.4% with a *better* calibrated
+   ECE (0.052 vs Jev's 0.092) automates none. The ranking question is coverage
+   under a budget, not ECE.
+3. **A trained head still wins this task, as it should.** char_lr / svm_sig
+   saw BANKING77 train labels. Jev did not. The interesting comparison is Jev
+   vs Laya: both zero-shot, 77-way, same ids. Jev is the first hosted decision
+   model that produces a usable CRC curve on this pack.
+
+Split-to-split (20 seeds, same 500 ids, `examples/banking77/compare-jev500/crc-split-variation.json`).
+Certified coverage among feasible seeds:
+
+| Model | @5% feasible | @5% cov mean [p10, p90] | @10% feasible | @10% cov mean [p10, p90] |
+|---|---|---|---|---|
+| svm_sig | 20/20 | 91.1% [83.3, 97.5] | 20/20 | 97.7% [94.8, 99.7] |
+| char_lr | 20/20 | 90.4% [86.0, 96.7] | 20/20 | 98.2% [95.7, 100] |
+| word_lr | 20/20 | 87.7% [78.9, 93.0] | 20/20 | 97.1% [92.8, 99.7] |
+| **jev** | **20/20** | **65.4% [59.4, 70.5]** | **20/20** | **78.1% [74.9, 81.3]** |
+| laya_rawT | 20/20 | 10.4% [5.4, 15.8] | 20/20 | 23.1% [14.3, 28.7] |
+| laya | 10/20 | 8.6% [0.3, 16.4] | 12/20 | 13.7% [4.7, 24.2] |
+
+Jev's 5% certificate is feasible on every split and stays in an 11-point band.
+Laya's 5% certificate exists only half the time, and when it does it covers
+~9%. Seed 42 (the printed compare) is typical for Jev, not a lucky draw.
+
+This is still **this 500-row subset of this pool**, not a population. It is
+enough to put Jev on the same chart as Laya and the sklearn heads, which the
+toy pack was not.
+
+**Reproduce** (live Jev calls; billed):
+
+```bash
+uv run python scripts/export_jev_predictions.py --pack banking77 --limit 500 --seed 42
+# then subset the other providers onto those ids and:
+uv run decisionops compare examples/banking77/providers/jev_dataset.jsonl \
+  -p jev=examples/banking77/providers/jev.jsonl \
+  -p laya=examples/banking77/providers/laya.jsonl \
+  -p laya_rawT=examples/banking77/providers/laya_rawT.jsonl \
+  -p char_lr=examples/banking77/providers/tfidf_char_lr.jsonl \
+  -p word_lr=examples/banking77/providers/tfidf_word_lr.jsonl \
+  -p svm_sig=examples/banking77/providers/tfidf_svm_sigmoid.jsonl \
+  --target-risks 0.05,0.10 \
+  --output examples/banking77/compare-jev500
+```
+
+Tracked artefacts: `examples/banking77/providers/jev_stats.json`,
+`examples/banking77/compare-jev500/{compare_report.json,crc-split-variation.json}`.
+The 500-row JSONL is gitignored like the rest of the pack.
+
+---
+
 ## Limits on all of the above
 
 **Laya scope.** One checkpoint, zero-shot, one task shape, 77/151 options. Its
 authors describe it as a fine-tuning base, so weak zero-shot accuracy is expected
 behaviour, not a defect. No fine-tuning was performed. Nothing here predicts how
 a fine-tuned Laya behaves.
+
+**Jev scope.** One hosted snapshot (`jev-1.13.0`), zero-shot, 500 of 3076
+BANKING77 test rows, no contract descriptions. Nothing here predicts a
+fine-tuned Jev, a binary Noul routing task, or production traffic. 1% CRC was
+not run: `n_crc_cal=120` is too close to the 99-sample floor.
 
 **sklearn heads are stress-test baselines.** TF-IDF + linear models, chosen
 because their probability behaviour differs sharply. Not recommendations.

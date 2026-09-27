@@ -173,5 +173,6 @@ def run_certification(
             "temp_ratio": temp_ratio,
             "protocol": "three_way_split_temp_crc_test",
             "contract": contract.summary() if contract is not None else None,
+            "contract_hash": contract.fingerprint() if contract is not None else None,
         },
     )

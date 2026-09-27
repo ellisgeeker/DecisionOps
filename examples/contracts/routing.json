@@ -1,0 +1,13 @@
+{
+  "name": "routing",
+  "description": "Binary skip-vs-deep routing. Auto-execute skip; escalate everything else.",
+  "choices": ["skip", "deep"],
+  "auto_choices": ["skip"],
+  "costs": {"skip": 0.0, "deep": 1.0},
+  "yes_choice": "deep",
+  "instructions": "Does this need a deep review?",
+  "descriptions": {
+    "skip": "Safe to skip the expensive review.",
+    "deep": "Needs a deeper review before acting."
+  }
+}

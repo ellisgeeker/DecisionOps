@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
+from decisionops.cascade import CascadeReport
 from decisionops.conformal.certify import CertificationReport
 from decisionops.schemas import ComparisonReport, EvalResult, GateReport
 
@@ -416,4 +417,87 @@ def print_comparison_report(
             )
     for note in report.notes:
         console.print(f"• {escape(note)}")
+    console.print()
+
+
+def print_cascade_report(report: CascadeReport, console: Console | None = None) -> None:
+    console = console or Console()
+
+    console.print()
+    console.rule("[bold]DecisionOps Cascade (cost vs miss rate)[/bold]")
+    console.print(
+        f"n_total={report.split.n_total}  "
+        f"n_cal={report.split.n_calibration}  "
+        f"n_test={report.split.n_test}  "
+        f"cal_ratio={report.split.cal_ratio:.2f}  "
+        f"seed={report.split.seed}"
+    )
+    if report.provider or report.model:
+        console.print(
+            (f"provider={report.provider}  " if report.provider else "")
+            + (f"model={report.model}" if report.model else "")
+        )
+    cname = report.contract.get("name", "?")
+    auto = report.contract.get("auto_choices", [])
+    esc = report.contract.get("escalate_choices", [])
+    console.print(
+        f"contract={cname}  auto={auto}  escalate={esc}"
+    )
+    console.print(
+        f"baseline mean cost (always escalate)={report.baseline_mean_cost:.4f}  "
+        f"always-auto mean={report.always_auto_mean_cost:.4f}  "
+        f"always-auto miss={report.always_auto_miss_rate:.4f}"
+    )
+    console.print()
+
+    table = Table(
+        title="Cost–miss curve (held-out test; oracle escalate pricing)",
+        show_header=True,
+        header_style="bold",
+    )
+    table.add_column("Threshold", justify="right")
+    table.add_column("Automation", justify="right")
+    table.add_column("Miss rate", justify="right")
+    table.add_column("Sel. risk", justify="right")
+    table.add_column("Mean cost", justify="right")
+    table.add_column("Cost saved", justify="right")
+    table.add_column("Saved %", justify="right")
+    table.add_column("Auto / N", justify="right")
+
+    # Print a sparse grid: endpoints + every ~5th point, preferring round thresholds.
+    if not report.curve:
+        console.print("[yellow]No curve points.[/yellow]")
+    else:
+        n = len(report.curve)
+        keep = {0, n - 1}
+        for i, p in enumerate(report.curve):
+            hundredths = int(round(p.threshold * 100))
+            on_grid = abs(p.threshold * 100 - hundredths) < 1e-9
+            if on_grid and hundredths % 5 == 0:
+                keep.add(i)
+            if i % max(1, n // 12) == 0:
+                keep.add(i)
+        for i in sorted(keep):
+            p = report.curve[i]
+            sel = "—" if p.selective_risk is None else f"{p.selective_risk:.4f}"
+            frac = "—" if p.cost_saved_frac is None else f"{p.cost_saved_frac:.1%}"
+            table.add_row(
+                f"{p.threshold:.2f}",
+                f"{p.automation_rate:.1%}",
+                f"{p.miss_rate:.4f}",
+                sel,
+                f"{p.mean_cost:.4f}",
+                f"{p.cost_saved:.4f}",
+                frac,
+                f"{p.n_auto}/{p.n_total}",
+            )
+        console.print(table)
+
+    console.print(
+        "[dim]Escalation costs are oracle. miss_rate is the joint automated error rate "
+        "(auto AND wrong over all traffic) — the same quantity CRC certifies. "
+        "Thresholds here are empirical, not certified.[/dim]"
+    )
+    for note in report.notes:
+        console.print(f"• {escape(str(note))}")
     console.print()
