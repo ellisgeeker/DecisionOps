@@ -62,6 +62,37 @@ def test_validate_data_rejects_predictions_outside_contract():
         ROUTING.validate_data([case], [pred])
 
 
+def test_descriptions_must_name_known_choices():
+    with pytest.raises(ValidationError, match="descriptions for unknown choices"):
+        DecisionContract(
+            name="x", choices=["a", "b"], auto_choices=["a"], descriptions={"z": "nope"}
+        )
+
+
+def test_descriptions_and_instructions_appear_in_summary():
+    contract = DecisionContract(
+        name="x",
+        choices=["a", "b"],
+        auto_choices=["a"],
+        descriptions={"a": "safe to skip"},
+        instructions="Route this.",
+    )
+    summary = contract.summary()
+    assert summary["descriptions"] == {"a": "safe to skip"}
+    assert summary["instructions"] == "Route this."
+
+
+def test_laya_question_carries_descriptions_without_torch():
+    from decisionops.adapters.laya import laya_question
+
+    case = DecisionCase(id="1", choices=["skip", "deep"], label="skip", question="Q?")
+    q = laya_question(case, descriptions={"deep": "touches auth"})
+    assert q == {"t": "choice", "ins": "Q?", "crit": {"skip": None, "deep": "touches auth"}}
+    # No descriptions -> identical to the pre-contract behaviour.
+    assert laya_question(case)["crit"] == {"skip": None, "deep": None}
+    assert laya_question(case, contract_instructions="C.")["ins"] == "C."
+
+
 def test_load_contract_round_trips(tmp_path):
     path = tmp_path / "c.json"
     path.write_text(json.dumps(ROUTING.model_dump()), encoding="utf-8")

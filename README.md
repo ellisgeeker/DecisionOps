@@ -54,6 +54,7 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Model comparison (`compare`) | done |
 | 4a Laya adapter (local System-One model) | done |
 | 4a′ `--provider laya` on eval/gate/certify | done |
+| 4c TypeSafe Jev provider (`--provider jev`) | done |
 | 5 Conformal Risk Control (library, validated) | done |
 | 5b `certify` CLI command | done |
 | 5c HTML report (reliability + risk-coverage) | done |
@@ -174,6 +175,67 @@ Notes:
   softens — `--no-builtin-temperature` lets you measure that effect.
 - The published checkpoint is a base model intended for fine-tuning, so zero-shot
   accuracy on a 77-class benchmark is low. It is still useful for calibration study.
+- **Fine-tuned Laya:** point `--model-dir` at your checkpoint. It must keep the upstream
+  layout (`rl_common.py`, `rl_agent_config.json`, `encoder/`, `model.safetensors`,
+  `tokenizer/`); merge LoRA weights first. Pass `--no-builtin-temperature` — the shipped
+  temperature table is usually stale after fine-tuning, and DecisionOps fits its own.
+
+```bash
+uv run decisionops gate data.jsonl --provider laya \
+  --model-dir ./my-finetuned-laya --no-builtin-temperature
+```
+
+## Jev provider (hosted TypeSafe System One)
+
+[Jev](https://docs.typesafe.ai/introduction/quickstart) is TypeSafe's hosted decision
+model. Each case becomes one Choice question over the case's `choices`; the returned
+distribution maps directly onto a DecisionOps prediction.
+
+```bash
+uv sync --extra jev          # typesafe-sdk
+export TYPESAFE_API_KEY=...
+
+uv run decisionops eval data.jsonl --provider jev --limit 20
+uv run decisionops gate data.jsonl --provider jev --contract contract.json
+
+# A fine-tuned model id, or a private deployment
+uv run decisionops gate data.jsonl --provider jev \
+  --jev-model my-finetuned-jev --jev-base-url https://jev.internal.example
+
+# compare is offline, so export first
+uv run python scripts/export_jev_predictions.py --pack toy --limit 20
+```
+
+Notes:
+
+- One API call per case — start with `--limit` to check cost and latency.
+- Jev's own `confidence` field is recorded in metadata but not used; DecisionOps derives
+  confidence from the distribution, like every provider.
+- Only the **Choice** primitive is supported. Score (an ordered scale) and Noul (a yes/no
+  probability) do not map onto a case's own choice set, so they are out of scope.
+
+### Choice descriptions are part of the model input
+
+A contract can carry per-choice `descriptions` (sent as Jev `criteria`, and rendered as
+`choice: text` for Laya) and shared `instructions`:
+
+```json
+{
+  "name": "code-review-routing",
+  "choices": ["skip_deep_review", "deep_llm_review", "human_review"],
+  "auto_choices": ["skip_deep_review"],
+  "instructions": "Does this change need a deep review?",
+  "descriptions": {
+    "skip_deep_review": "Docs, comments, tests or formatting only; no logic change",
+    "deep_llm_review": "Changes business logic, an interface or a data structure",
+    "human_review": "Touches auth, payments, data deletion or security-sensitive code"
+  }
+}
+```
+
+A certificate only holds for the input the model saw. Certify with the same descriptions
+you use in production, give a fine-tuned model the descriptions it was trained with, and
+recertify whenever they change. Reports record them under `metadata.contract`.
 
 ## Gate protocol
 

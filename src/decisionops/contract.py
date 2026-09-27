@@ -37,6 +37,18 @@ class DecisionContract(BaseModel):
     costs: dict[str, float] = Field(default_factory=dict)
     """Optional per-choice cost of taking that path (any unit, used for reporting)."""
 
+    descriptions: dict[str, str] = Field(default_factory=dict)
+    """
+    Optional per-choice rubric text passed to the decision model as criteria.
+
+    Part of the model's input: certify with the same descriptions the model sees
+    in production, and recertify whenever they change. A fine-tuned model should
+    get the descriptions it was trained with.
+    """
+
+    instructions: str | None = None
+    """Optional shared question text; overrides each case's own `question`."""
+
     @model_validator(mode="after")
     def _check_consistency(self) -> DecisionContract:
         if len(set(self.choices)) != len(self.choices):
@@ -52,6 +64,11 @@ class DecisionContract(BaseModel):
         negative = sorted(k for k, v in self.costs.items() if v < 0)
         if negative:
             raise ValueError(f"contract {self.name!r}: negative costs for {negative}")
+        unknown_desc = sorted(set(self.descriptions) - set(self.choices))
+        if unknown_desc:
+            raise ValueError(
+                f"contract {self.name!r}: descriptions for unknown choices: {unknown_desc}"
+            )
         return self
 
     @property
@@ -69,6 +86,9 @@ class DecisionContract(BaseModel):
             "auto_choices": list(self.auto_choices),
             "escalate_choices": self.escalate_choices,
             "costs": dict(self.costs),
+            # Model input that was certified; a change here means recertify.
+            "descriptions": dict(self.descriptions),
+            "instructions": self.instructions,
         }
 
     def validate_data(

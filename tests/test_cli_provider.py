@@ -48,10 +48,82 @@ def test_eval_rejects_missing_source(tmp_path):
 def test_eval_rejects_unknown_provider(tmp_path):
     dataset, predictions = _write_pair(tmp_path)
     result = runner.invoke(
+        app, ["eval", str(dataset), "-p", str(predictions), "--provider", "nope"]
+    )
+    assert result.exit_code != 0
+    assert "unknown provider" in result.output.lower()
+
+
+def test_eval_rejects_predictions_with_jev(tmp_path):
+    dataset, predictions = _write_pair(tmp_path)
+    result = runner.invoke(
         app, ["eval", str(dataset), "-p", str(predictions), "--provider", "jev"]
     )
     assert result.exit_code != 0
-    assert "unknown provider" in result.output.lower() or "jev" in result.output.lower()
+    assert "static" in result.output.lower()
+
+
+def test_provider_specific_flags_rejected_on_wrong_provider(tmp_path):
+    dataset, predictions = _write_pair(tmp_path)
+    cases = [
+        ["--no-builtin-temperature"],
+        ["--jev-base-url", "https://x.example"],
+        ["--jev-model", "ft-1"],
+    ]
+    for extra in cases:
+        result = runner.invoke(app, ["eval", str(dataset), "-p", str(predictions), *extra])
+        assert result.exit_code != 0, extra
+        assert "not valid with --provider static" in result.output, extra
+
+
+def test_eval_runs_jev_with_contract_descriptions(tmp_path, monkeypatch):
+    """--provider jev end to end, with the provider stubbed so no network is used."""
+    import decisionops.adapters.jev as jev_mod
+    from decisionops.schemas import DecisionPrediction
+
+    seen = {}
+
+    class StubJev:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.model = kwargs["model"]
+
+        def predict_many(self, cases):
+            return [
+                DecisionPrediction(
+                    id=c.id, prediction="a", probabilities={"a": 0.9, "b": 0.1}, provider="jev"
+                )
+                for c in cases
+            ]
+
+    monkeypatch.setattr(jev_mod, "JevProvider", StubJev)
+    dataset, _ = _write_pair(tmp_path)
+    contract = tmp_path / "contract.json"
+    contract.write_text(
+        json.dumps(
+            {
+                "name": "t",
+                "choices": ["a", "b"],
+                "auto_choices": ["a"],
+                "descriptions": {"a": "safe"},
+                "instructions": "Pick.",
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "eval", str(dataset), "--provider", "jev",
+            "--jev-model", "ft-1", "--jev-base-url", "https://jev.internal.example",
+            "--contract", str(contract),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["model"] == "ft-1"
+    assert seen["base_url"] == "https://jev.internal.example"
+    assert seen["descriptions"] == {"a": "safe"}
+    assert seen["contract_instructions"] == "Pick."
 
 
 def test_eval_rejects_predictions_with_laya(tmp_path):

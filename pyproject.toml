@@ -40,6 +40,10 @@ dev = [
 bench = [
   "datasets>=2.20",
 ]
+# Hosted TypeSafe Jev (System One) decision model provider
+jev = [
+  "typesafe-sdk==0.7.2",
+]
 # Local Laya (System-One) decision model provider
 laya = [
   "datasets>=2.20",

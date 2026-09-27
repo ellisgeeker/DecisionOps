@@ -53,7 +53,7 @@ def _parse_risks(value: str) -> list[float]:
     return risks
 
 
-_PROVIDERS = ("static", "laya")
+_PROVIDERS = ("static", "laya", "jev")
 
 ContractOption = Annotated[
     Path | None,
@@ -63,6 +63,32 @@ ContractOption = Annotated[
         "escalations never do.",
         exists=True,
         dir_okay=False,
+    ),
+]
+
+
+NoBuiltinTemperatureOption = Annotated[
+    bool,
+    typer.Option(
+        "--no-builtin-temperature",
+        help="Laya only: ignore the checkpoint's bundled temperature table "
+        "(often stale after fine-tuning).",
+    ),
+]
+
+JevModelOption = Annotated[
+    str | None,
+    typer.Option(
+        "--jev-model",
+        help="Jev only: model id (default jev-latest); also a fine-tuned model id.",
+    ),
+]
+
+JevBaseUrlOption = Annotated[
+    str | None,
+    typer.Option(
+        "--jev-base-url",
+        help="Jev only: API base URL for a private or custom deployment.",
     ),
 ]
 
@@ -83,12 +109,18 @@ def _load_cases_and_predictions(
     provider_name: str | None,
     model_dir: Path | None = None,
     limit: int | None = None,
+    no_builtin_temperature: bool = False,
+    jev_model: str | None = None,
+    jev_base_url: str | None = None,
+    contract: DecisionContract | None = None,
 ):
     """
     Resolve a prediction source.
 
     `--predictions` (with or without `--provider static`) is the offline path.
-    `--provider laya` runs local inference; `--predictions` is then rejected.
+    `--provider laya|jev` runs live inference; `--predictions` is then rejected.
+    A contract's descriptions / instructions become the live model's input, so the
+    certified input and the production input are the same.
     """
     cases = load_dataset(dataset)
     if limit is not None:
@@ -98,11 +130,27 @@ def _load_cases_and_predictions(
 
     name = (provider_name or ("static" if predictions is not None else None))
     if name is None:
-        raise typer.BadParameter("provide --predictions FILE or --provider laya")
+        raise typer.BadParameter("provide --predictions FILE or --provider laya|jev")
     name = name.strip().lower()
     if name not in _PROVIDERS:
         raise typer.BadParameter(
             f"unknown provider {provider_name!r}; choose from {', '.join(_PROVIDERS)}"
+        )
+
+    # Provider-specific flags must not be silently ignored on another provider.
+    misplaced = [
+        flag
+        for flag, value, owner in (
+            ("--model-dir", model_dir is not None, "laya"),
+            ("--no-builtin-temperature", no_builtin_temperature, "laya"),
+            ("--jev-model", jev_model is not None, "jev"),
+            ("--jev-base-url", jev_base_url is not None, "jev"),
+        )
+        if value and name != owner
+    ]
+    if misplaced:
+        raise typer.BadParameter(
+            f"{', '.join(misplaced)} not valid with --provider {name}"
         )
 
     if name == "static":
@@ -114,10 +162,17 @@ def _load_cases_and_predictions(
     if predictions is not None:
         raise typer.BadParameter("--predictions is only valid with --provider static")
 
+    descriptions = contract.descriptions if contract is not None else None
+    contract_instructions = contract.instructions if contract is not None else None
+
     if name == "laya":
         from decisionops.adapters.laya import LayaProvider
 
-        kwargs: dict = {}
+        kwargs: dict = {
+            "apply_builtin_temperature": not no_builtin_temperature,
+            "descriptions": descriptions,
+            "contract_instructions": contract_instructions,
+        }
         if model_dir is not None:
             kwargs["model_dir"] = model_dir
         provider = LayaProvider(**kwargs)
@@ -126,6 +181,23 @@ def _load_cases_and_predictions(
             f"(device={provider.device})…[/dim]"
         )
         return cases, provider.predict_many(cases)
+
+    if name == "jev":
+        from decisionops.adapters.jev import DEFAULT_MODEL, JevProvider
+
+        provider = JevProvider(
+            model=jev_model or DEFAULT_MODEL,
+            base_url=jev_base_url,
+            descriptions=descriptions,
+            contract_instructions=contract_instructions,
+        )
+        console.print(
+            f"[dim]Running Jev ({provider.model}) on {len(cases)} cases…[/dim]"
+        )
+        try:
+            return cases, provider.predict_many(cases)
+        except (RuntimeError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
 
     raise typer.BadParameter(f"unhandled provider {name!r}")
 
@@ -172,7 +244,7 @@ def eval_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev."),
     ] = None,
     model_dir: Annotated[
         Path | None,
@@ -197,6 +269,10 @@ def eval_cmd(
         int,
         typer.Option("--n-bins", help="Number of fixed bins for ECE / reliability diagram."),
     ] = 10,
+    no_builtin_temperature: NoBuiltinTemperatureOption = False,
+    jev_model: JevModelOption = None,
+    jev_base_url: JevBaseUrlOption = None,
+    contract: ContractOption = None,
 ) -> None:
     """
     Quick same-set evaluation (smoke / debugging).
@@ -206,17 +282,23 @@ def eval_cmd(
     Examples:
       decisionops eval data.jsonl -p preds.jsonl
       decisionops eval data.jsonl --provider laya --limit 50
+      decisionops eval data.jsonl --provider jev --limit 20
     """
     if n_bins < 1:
         raise typer.BadParameter("--n-bins must be >= 1")
 
     risks = _parse_risks(target_risks)
+    decision_contract = _load_contract_option(contract)
     cases, preds = _load_cases_and_predictions(
         dataset,
         predictions=predictions,
         provider_name=provider,
         model_dir=model_dir,
         limit=limit,
+        no_builtin_temperature=no_builtin_temperature,
+        jev_model=jev_model,
+        jev_base_url=jev_base_url,
+        contract=decision_contract,
     )
     result = evaluate(
         cases,
@@ -248,7 +330,7 @@ def gate_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev."),
     ] = None,
     model_dir: Annotated[
         Path | None,
@@ -286,6 +368,9 @@ def gate_cmd(
         ),
     ] = True,
     contract: ContractOption = None,
+    no_builtin_temperature: NoBuiltinTemperatureOption = False,
+    jev_model: JevModelOption = None,
+    jev_base_url: JevBaseUrlOption = None,
 ) -> None:
     """
     Technical gate: cal/test split, optional temperature + isotonic, held-out metrics.
@@ -293,6 +378,7 @@ def gate_cmd(
     Examples:
       decisionops gate data.jsonl -p preds.jsonl
       decisionops gate data.jsonl --provider laya
+      decisionops gate data.jsonl --provider jev --contract contract.json
     """
     if n_bins < 1:
         raise typer.BadParameter("--n-bins must be >= 1")
@@ -300,14 +386,18 @@ def gate_cmd(
         raise typer.BadParameter("--cal-ratio must be in (0, 1)")
 
     risks = _parse_risks(target_risks)
+    decision_contract = _load_contract_option(contract)
     cases, preds = _load_cases_and_predictions(
         dataset,
         predictions=predictions,
         provider_name=provider,
         model_dir=model_dir,
         limit=limit,
+        no_builtin_temperature=no_builtin_temperature,
+        jev_model=jev_model,
+        jev_base_url=jev_base_url,
+        contract=decision_contract,
     )
-    decision_contract = _load_contract_option(contract)
     try:
         report = run_gate(
             cases,
@@ -435,7 +525,7 @@ def certify_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev."),
     ] = None,
     model_dir: Annotated[
         Path | None,
@@ -477,6 +567,9 @@ def certify_cmd(
         typer.Option("--calibrate/--no-calibrate", help="Fit temperature scaling."),
     ] = True,
     contract: ContractOption = None,
+    no_builtin_temperature: NoBuiltinTemperatureOption = False,
+    jev_model: JevModelOption = None,
+    jev_base_url: JevBaseUrlOption = None,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -495,14 +588,18 @@ def certify_cmd(
         raise typer.BadParameter("--temp-ratio must be in [0, 1)")
 
     levels = _parse_risks(alphas)
+    decision_contract = _load_contract_option(contract)
     cases, preds = _load_cases_and_predictions(
         dataset,
         predictions=predictions,
         provider_name=provider,
         model_dir=model_dir,
         limit=limit,
+        no_builtin_temperature=no_builtin_temperature,
+        jev_model=jev_model,
+        jev_base_url=jev_base_url,
+        contract=decision_contract,
     )
-    decision_contract = _load_contract_option(contract)
     try:
         report = run_certification(
             cases,

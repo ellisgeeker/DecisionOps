@@ -95,6 +95,28 @@ def _pick_device(requested: str | None) -> str:
     return "cpu"
 
 
+def laya_question(
+    case: DecisionCase,
+    *,
+    instructions: str | None = None,
+    contract_instructions: str | None = None,
+    descriptions: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """
+    Jev-shaped choice question for Laya.
+
+    Upstream `render_options` renders a non-empty criterion as "choice: text",
+    so contract descriptions reach the model without any format work here.
+    """
+    descriptions = descriptions or {}
+    return {
+        "t": "choice",
+        "ins": instructions or contract_instructions or case.question or "Pick the best option.",
+        # dict keeps option order; None means "label only", as before descriptions
+        "crit": {choice: descriptions.get(choice) for choice in case.choices},
+    }
+
+
 class LayaProvider:
     """
     Local Laya decision model.
@@ -114,6 +136,8 @@ class LayaProvider:
         device: str | None = None,
         apply_builtin_temperature: bool = True,
         instructions: str | None = None,
+        descriptions: dict[str, str] | None = None,
+        contract_instructions: str | None = None,
     ) -> None:
         torch = _require_torch()
         from safetensors.torch import load_file
@@ -141,6 +165,8 @@ class LayaProvider:
         self.temperature = self.cfg.get("temperature", [1.0, 1.0, 1.0])
         self.temperature_by_options = self.cfg.get("temperature_by_options", {})
         self.instructions = instructions
+        self.descriptions = dict(descriptions or {})
+        self.contract_instructions = contract_instructions
         self.model_name = self.cfg.get("model_name", "laya")
         if subdir:
             self.model_name = f"{self.model_name}/{subdir}"
@@ -148,13 +174,12 @@ class LayaProvider:
     # ---------------------------------------------------------------- internals
 
     def _question(self, case: DecisionCase) -> dict[str, Any]:
-        instructions = self.instructions or case.question or "Pick the best option."
-        return {
-            "t": "choice",
-            "ins": instructions,
-            # dict keeps option order and allows per-option criteria text later
-            "crit": {choice: None for choice in case.choices},
-        }
+        return laya_question(
+            case,
+            instructions=self.instructions,
+            contract_instructions=self.contract_instructions,
+            descriptions=self.descriptions,
+        )
 
     def _temperature_for(self, qtype: int, n_options: int) -> float:
         if not self.apply_builtin_temperature:
