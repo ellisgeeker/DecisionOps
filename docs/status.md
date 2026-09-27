@@ -10,11 +10,10 @@ incomplete. Written so it is usable after a gap of days or weeks.
 
 ## Pick up here tomorrow
 
-1. **Live Jev smoke.** The adapter is built and unit-tested against a fake
-   client, but has not hit the real API. With a key:
-   `DECISIONOPS_LIVE_JEV=1 TYPESAFE_API_KEY=... uv run pytest tests/test_jev_adapter.py -q`,
-   then `uv run python scripts/export_jev_predictions.py --pack toy --limit 20`
-   and gate the result.
+1. ~~Live Jev smoke~~ — done 2026-09-27: live test passes; 20-case toy Choice
+   export (accuracy 1.0, ~380 ms/case); Noul routes a docs-typo diff to skip
+   (P(yes)=0.03) and an auth-token rewrite to deep review (P(yes)=0.89).
+   Toy data is too easy to say anything about calibration.
 2. Then roadmap item 5: cost + offline cascade simulation.
 
 Decided 2026-09-26: customers bring their own decision model (Jev, a fine-tuned
@@ -105,7 +104,7 @@ Provider-specific flags (`--model-dir`, `--no-builtin-temperature`, `--jev-model
 |---|---|---|
 | Static file | `adapters/base.py` | done — offline predictions, used for CI |
 | Laya | `adapters/laya.py` | done — local inference; `--model-dir` for a fine-tuned checkpoint, `--no-builtin-temperature` |
-| TypeSafe Jev | `adapters/jev.py` | done — hosted Choice + Noul via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. **Not yet run against the live API** |
+| TypeSafe Jev | `adapters/jev.py` | done — hosted Choice + Noul via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. Live-verified 2026-09-27 against `jev-1.13.0` (Choice + Noul) |
 | sklearn heads | `scripts/export_multi_providers.py` | done — 4 heads with deliberately different probability behaviour |
 
 The Laya adapter imports upstream `rl_common.py` from the downloaded snapshot
