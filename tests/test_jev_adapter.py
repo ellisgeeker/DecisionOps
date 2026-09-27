@@ -163,6 +163,121 @@ def test_base_url_reaches_sdk_client(monkeypatch):
     assert provider.predict(CASE).metadata["base_url"] == "https://jev.internal.example"
 
 
+# ------------------------------------------------------------------ noul
+
+ROUTE = DecisionCase(
+    id="r1",
+    state="diff: rewrites the payment retry loop",
+    question="Does this change need a deep review?",
+    choices=["skip_deep_review", "deep_llm_review"],
+    label="deep_llm_review",
+)
+
+
+class FakeNoulClient(FakeClient):
+    def __init__(self, p_yes):
+        super().__init__({"x": 1.0})
+        self.p_yes = p_yes
+
+    def system_one(self, *, state, questions, model=None):
+        self.calls.append({"state": state, "questions": questions, "model": model})
+        answer = SimpleNamespace(type="noul", noul=self.p_yes)
+        return SimpleNamespace(model=self.model, answers={"decision": answer}, usage=None)
+
+
+def _noul(client, **kwargs):
+    return _provider(client, question_type="noul", yes_choice="deep_llm_review", **kwargs)
+
+
+def test_noul_maps_p_yes_onto_the_two_choices():
+    pred = _noul(FakeNoulClient(0.82)).predict(ROUTE)
+    assert pred.probabilities == pytest.approx(
+        {"deep_llm_review": 0.82, "skip_deep_review": 0.18}
+    )
+    assert pred.prediction == "deep_llm_review"
+    assert pred.metadata["question_type"] == "noul"
+    assert pred.metadata["noul"] == 0.82
+
+    low = _noul(FakeNoulClient(0.1)).predict(ROUTE)
+    assert low.prediction == "skip_deep_review"
+    assert low.confidence == pytest.approx(0.9)
+
+
+def test_noul_tie_resolves_to_no():
+    # A coin flip must not be read as a "yes, escalate" — nor as a confident skip.
+    pred = _noul(FakeNoulClient(0.5)).predict(ROUTE)
+    assert pred.prediction == "skip_deep_review"
+
+
+def test_noul_sends_noul_question_with_descriptions_as_true_false():
+    client = FakeNoulClient(0.7)
+    _noul(
+        client,
+        descriptions={
+            "deep_llm_review": "touches logic, interfaces or data",
+            "skip_deep_review": "docs or formatting only",
+        },
+    ).predict(ROUTE)
+    question = client.calls[0]["questions"]["decision"]
+    assert question.type == "noul"
+    assert question.instructions == "Does this change need a deep review?"
+    # NoulCriteria is a TypedDict with fixed true/false keys.
+    assert question.criteria == {
+        "true": "touches logic, interfaces or data",
+        "false": "docs or formatting only",
+    }
+
+
+def test_noul_without_descriptions_sends_no_criteria():
+    client = FakeNoulClient(0.7)
+    _noul(client).predict(ROUTE)
+    assert client.calls[0]["questions"]["decision"].criteria is None
+
+
+def test_noul_rejects_non_binary_cases_and_missing_yes_choice():
+    from decisionops.adapters.jev import JevProvider
+
+    with pytest.raises(ValueError, match="exactly 2 choices"):
+        _noul(FakeNoulClient(0.7)).predict(CASE)  # CASE has three choices
+    with pytest.raises(ValueError, match="yes_choice"):
+        JevProvider(client=FakeNoulClient(0.7), question_type="noul")
+    with pytest.raises(ValueError, match="question_type"):
+        JevProvider(client=FakeNoulClient(0.7), question_type="score")
+
+
+def test_noul_predictions_certify_through_asymmetric_contract():
+    """End to end: Noul answers -> auto-path-only CRC certificate."""
+    import numpy as np
+
+    from decisionops.conformal.certify import run_certification
+    from decisionops.contract import DecisionContract
+
+    contract = DecisionContract(
+        name="deep-review-routing",
+        choices=["skip_deep_review", "deep_llm_review"],
+        auto_choices=["skip_deep_review"],
+        yes_choice="deep_llm_review",
+    )
+    rng = np.random.default_rng(0)
+    cases, preds = [], []
+    for i in range(600):
+        # Calibrated model: P(needs review) == p_yes.
+        p_yes = float(rng.uniform(0.0, 1.0))
+        needs = bool(rng.random() < p_yes)
+        case = ROUTE.model_copy(
+            update={"id": str(i), "label": "deep_llm_review" if needs else "skip_deep_review"}
+        )
+        cases.append(case)
+        preds.append(_noul(FakeNoulClient(p_yes)).predict(case))
+
+    report = run_certification(cases, preds, alphas=[0.05], calibrate=False, contract=contract)
+    level = report.levels[0]
+    assert level.certificate.feasible
+    # Only confident skips are auto-executed; escalations are never risk.
+    assert 0.0 < level.test["coverage"] < 0.5
+    assert report.metadata["contract"]["yes_choice"] == "deep_llm_review"
+
+
 @pytest.mark.skipif(
     not (os.environ.get("TYPESAFE_API_KEY") and os.environ.get("DECISIONOPS_LIVE_JEV") == "1"),
     reason="live Jev smoke: set TYPESAFE_API_KEY and DECISIONOPS_LIVE_JEV=1",

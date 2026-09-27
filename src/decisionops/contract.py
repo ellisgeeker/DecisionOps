@@ -49,6 +49,14 @@ class DecisionContract(BaseModel):
     instructions: str | None = None
     """Optional shared question text; overrides each case's own `question`."""
 
+    yes_choice: str | None = None
+    """
+    For binary (yes/no) decisions: the choice that means "yes".
+
+    Needed to ask a model a yes/no question such as Jev Noul ("does this need a
+    deep review?"), whose answer is P(yes). Only valid with exactly two choices.
+    """
+
     @model_validator(mode="after")
     def _check_consistency(self) -> DecisionContract:
         if len(set(self.choices)) != len(self.choices):
@@ -69,6 +77,16 @@ class DecisionContract(BaseModel):
             raise ValueError(
                 f"contract {self.name!r}: descriptions for unknown choices: {unknown_desc}"
             )
+        if self.yes_choice is not None:
+            if len(self.choices) != 2:
+                raise ValueError(
+                    f"contract {self.name!r}: yes_choice needs exactly 2 choices, "
+                    f"got {len(self.choices)}"
+                )
+            if self.yes_choice not in self.choices:
+                raise ValueError(
+                    f"contract {self.name!r}: yes_choice {self.yes_choice!r} not in choices"
+                )
         return self
 
     @property
@@ -89,6 +107,7 @@ class DecisionContract(BaseModel):
             # Model input that was certified; a change here means recertify.
             "descriptions": dict(self.descriptions),
             "instructions": self.instructions,
+            "yes_choice": self.yes_choice,
         }
 
     def validate_data(

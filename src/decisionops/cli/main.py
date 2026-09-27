@@ -84,6 +84,15 @@ JevModelOption = Annotated[
     ),
 ]
 
+JevQuestionOption = Annotated[
+    str | None,
+    typer.Option(
+        "--jev-question",
+        help="Jev only: choice (default) or noul. noul asks a calibrated yes/no "
+        "question and needs a contract with yes_choice.",
+    ),
+]
+
 JevBaseUrlOption = Annotated[
     str | None,
     typer.Option(
@@ -112,6 +121,7 @@ def _load_cases_and_predictions(
     no_builtin_temperature: bool = False,
     jev_model: str | None = None,
     jev_base_url: str | None = None,
+    jev_question: str | None = None,
     contract: DecisionContract | None = None,
 ):
     """
@@ -145,6 +155,7 @@ def _load_cases_and_predictions(
             ("--no-builtin-temperature", no_builtin_temperature, "laya"),
             ("--jev-model", jev_model is not None, "jev"),
             ("--jev-base-url", jev_base_url is not None, "jev"),
+            ("--jev-question", jev_question is not None, "jev"),
         )
         if value and name != owner
     ]
@@ -183,13 +194,26 @@ def _load_cases_and_predictions(
         return cases, provider.predict_many(cases)
 
     if name == "jev":
-        from decisionops.adapters.jev import DEFAULT_MODEL, JevProvider
+        from decisionops.adapters.jev import DEFAULT_MODEL, QUESTION_TYPES, JevProvider
 
+        question_type = (jev_question or "choice").strip().lower()
+        if question_type not in QUESTION_TYPES:
+            raise typer.BadParameter(
+                f"--jev-question must be one of {', '.join(QUESTION_TYPES)}"
+            )
+        yes_choice = contract.yes_choice if contract is not None else None
+        if question_type == "noul" and yes_choice is None:
+            raise typer.BadParameter(
+                "--jev-question noul needs --contract with yes_choice "
+                "(the choice that means 'yes')"
+            )
         provider = JevProvider(
             model=jev_model or DEFAULT_MODEL,
             base_url=jev_base_url,
             descriptions=descriptions,
             contract_instructions=contract_instructions,
+            question_type=question_type,
+            yes_choice=yes_choice,
         )
         console.print(
             f"[dim]Running Jev ({provider.model}) on {len(cases)} cases…[/dim]"
@@ -272,6 +296,7 @@ def eval_cmd(
     no_builtin_temperature: NoBuiltinTemperatureOption = False,
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
+    jev_question: JevQuestionOption = None,
     contract: ContractOption = None,
 ) -> None:
     """
@@ -298,6 +323,7 @@ def eval_cmd(
         no_builtin_temperature=no_builtin_temperature,
         jev_model=jev_model,
         jev_base_url=jev_base_url,
+        jev_question=jev_question,
         contract=decision_contract,
     )
     result = evaluate(
@@ -371,6 +397,7 @@ def gate_cmd(
     no_builtin_temperature: NoBuiltinTemperatureOption = False,
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
+    jev_question: JevQuestionOption = None,
 ) -> None:
     """
     Technical gate: cal/test split, optional temperature + isotonic, held-out metrics.
@@ -396,6 +423,7 @@ def gate_cmd(
         no_builtin_temperature=no_builtin_temperature,
         jev_model=jev_model,
         jev_base_url=jev_base_url,
+        jev_question=jev_question,
         contract=decision_contract,
     )
     try:
@@ -570,6 +598,7 @@ def certify_cmd(
     no_builtin_temperature: NoBuiltinTemperatureOption = False,
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
+    jev_question: JevQuestionOption = None,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -598,6 +627,7 @@ def certify_cmd(
         no_builtin_temperature=no_builtin_temperature,
         jev_model=jev_model,
         jev_base_url=jev_base_url,
+        jev_question=jev_question,
         contract=decision_contract,
     )
     try:

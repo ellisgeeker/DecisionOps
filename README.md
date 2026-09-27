@@ -211,8 +211,35 @@ Notes:
 - One API call per case — start with `--limit` to check cost and latency.
 - Jev's own `confidence` field is recorded in metadata but not used; DecisionOps derives
   confidence from the distribution, like every provider.
-- Only the **Choice** primitive is supported. Score (an ordered scale) and Noul (a yes/no
-  probability) do not map onto a case's own choice set, so they are out of scope.
+- **Choice** (default) and **Noul** are supported. **Score** is not: its value is the
+  ordering of its levels, and treating them as unordered classes would make every metric
+  misleading. It needs an ordinal risk design of its own.
+
+### Noul: calibrated yes/no routing
+
+Most routing questions are yes/no — "does this change need a deep review?". Noul returns
+p = P(yes), which DecisionOps maps to `{yes_choice: p, other: 1 - p}` so the usual gate
+and certificate apply. The contract names the "yes" choice:
+
+```json
+{
+  "name": "deep-review-routing",
+  "choices": ["skip_deep_review", "deep_llm_review"],
+  "auto_choices": ["skip_deep_review"],
+  "yes_choice": "deep_llm_review",
+  "instructions": "Does this change need a deep review?"
+}
+```
+
+```bash
+uv run decisionops certify data.jsonl --provider jev --jev-question noul \
+  --contract contract.json
+```
+
+Descriptions for the two choices are sent as Noul's `true` / `false` criteria. With a
+binary question the confidence floor is 0.5, so a case is auto-executed only when
+P(no) clears the certified threshold. A p = 0.5 answer resolves to "no" at the minimum
+possible confidence, so it is the first case excluded as the threshold rises.
 
 ### Choice descriptions are part of the model input
 

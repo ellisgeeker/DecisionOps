@@ -53,6 +53,12 @@ def main() -> None:
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Jev model id, or a fine-tuned id")
     parser.add_argument("--base-url", default=None, help="Private / custom Jev endpoint")
     parser.add_argument(
+        "--question",
+        choices=["choice", "noul"],
+        default="choice",
+        help="noul = calibrated yes/no; needs a contract with yes_choice",
+    )
+    parser.add_argument(
         "--contract",
         type=Path,
         default=None,
@@ -73,11 +79,16 @@ def main() -> None:
     print(f"pack={args.pack}  cases={len(subset)}/{len(cases)}  choices={len(subset[0].choices)}")
 
     contract = load_contract(args.contract) if args.contract else None
+    yes_choice = contract.yes_choice if contract else None
+    if args.question == "noul" and yes_choice is None:
+        raise SystemExit("--question noul needs --contract with yes_choice")
     provider = JevProvider(
         model=args.model,
         base_url=args.base_url,
         descriptions=contract.descriptions if contract else None,
         contract_instructions=contract.instructions if contract else None,
+        question_type=args.question,
+        yes_choice=yes_choice,
     )
 
     t0 = time.perf_counter()

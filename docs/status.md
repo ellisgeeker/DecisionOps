@@ -105,16 +105,23 @@ Provider-specific flags (`--model-dir`, `--no-builtin-temperature`, `--jev-model
 |---|---|---|
 | Static file | `adapters/base.py` | done — offline predictions, used for CI |
 | Laya | `adapters/laya.py` | done — local inference; `--model-dir` for a fine-tuned checkpoint, `--no-builtin-temperature` |
-| TypeSafe Jev | `adapters/jev.py` | done — hosted Choice via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. **Not yet run against the live API** |
+| TypeSafe Jev | `adapters/jev.py` | done — hosted Choice + Noul via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. **Not yet run against the live API** |
 | sklearn heads | `scripts/export_multi_providers.py` | done — 4 heads with deliberately different probability behaviour |
 
 The Laya adapter imports upstream `rl_common.py` from the downloaded snapshot
 rather than vendoring a copy, so the sequence layout and temperature buckets stay
 in sync with the published checkpoint.
 
-Jev supports only the **Choice** primitive. Score (an ordered 2–10 level scale)
-and Noul (a calibrated yes/no probability) do not map onto a case's own choice
-set, so they are out of scope rather than forced into `DecisionPrediction`.
+Jev supports **Choice** (default) and **Noul** (`--jev-question noul`). Noul's
+P(yes) maps onto a binary contract via `yes_choice`, which is the natural form
+for routing ("does this need a deep review?"); descriptions become Noul's
+`true` / `false` criteria. **Score** is out of scope: its value is the ordering
+of its levels, so treating levels as unordered classes would make ECE, accuracy
+and the CRC loss misleading. Supporting it needs an ordinal risk design (e.g.
+"under-rating by more than one level is an error"), not just an adapter.
+
+Earlier note (2026-09-26) claimed Noul "does not map onto a case's choice set".
+That was wrong: a binary case maps exactly, as above.
 
 Contract `descriptions` / `instructions` are sent to live providers as model
 input (Jev `criteria`; Laya renders them as `choice: text`). A certificate holds
@@ -141,7 +148,7 @@ in tree.
 
 ### Validation performed
 
-- **84 tests passing** (1 live Jev smoke skipped without a key), ruff clean.
+- **92 tests passing** (1 live Jev smoke skipped without a key), ruff clean.
 
 - CRC correctness is now a **regression test** (`tests/test_crc_analytic.py`):
   60 fresh pools, n_cal=150 so `B/(n+1)` is a visible share of α, `λ̂` compared

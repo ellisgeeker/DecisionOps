@@ -69,6 +69,7 @@ def test_provider_specific_flags_rejected_on_wrong_provider(tmp_path):
         ["--no-builtin-temperature"],
         ["--jev-base-url", "https://x.example"],
         ["--jev-model", "ft-1"],
+        ["--jev-question", "noul"],
     ]
     for extra in cases:
         result = runner.invoke(app, ["eval", str(dataset), "-p", str(predictions), *extra])
@@ -124,6 +125,16 @@ def test_eval_runs_jev_with_contract_descriptions(tmp_path, monkeypatch):
     assert seen["base_url"] == "https://jev.internal.example"
     assert seen["descriptions"] == {"a": "safe"}
     assert seen["contract_instructions"] == "Pick."
+    assert seen["question_type"] == "choice"
+
+
+def test_jev_noul_requires_contract_with_yes_choice(tmp_path):
+    dataset, _ = _write_pair(tmp_path)
+    result = runner.invoke(
+        app, ["eval", str(dataset), "--provider", "jev", "--jev-question", "noul"]
+    )
+    assert result.exit_code != 0
+    assert "yes_choice" in result.output
 
 
 def test_eval_rejects_predictions_with_laya(tmp_path):

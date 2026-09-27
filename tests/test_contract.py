@@ -93,6 +93,17 @@ def test_laya_question_carries_descriptions_without_torch():
     assert laya_question(case, contract_instructions="C.")["ins"] == "C."
 
 
+def test_yes_choice_requires_binary_contract_and_known_choice():
+    with pytest.raises(ValidationError, match="exactly 2 choices"):
+        DecisionContract(
+            name="x", choices=["a", "b", "c"], auto_choices=["a"], yes_choice="b"
+        )
+    with pytest.raises(ValidationError, match="not in choices"):
+        DecisionContract(name="x", choices=["a", "b"], auto_choices=["a"], yes_choice="z")
+    ok = DecisionContract(name="x", choices=["no", "yes"], auto_choices=["no"], yes_choice="yes")
+    assert ok.summary()["yes_choice"] == "yes"
+
+
 def test_load_contract_round_trips(tmp_path):
     path = tmp_path / "c.json"
     path.write_text(json.dumps(ROUTING.model_dump()), encoding="utf-8")
