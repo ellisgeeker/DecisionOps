@@ -116,7 +116,7 @@ in tree.
 
 ### Validation performed
 
-- **70 tests passing**, ruff clean.
+- **68 tests passing**, ruff clean.
 
 - CRC correctness is now a **regression test** (`tests/test_crc_analytic.py`):
   60 fresh pools, n_cal=150 so `B/(n+1)` is a visible share of α, `λ̂` compared
