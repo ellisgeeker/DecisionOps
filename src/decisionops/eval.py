@@ -10,6 +10,7 @@ from decisionops.calibration.temperature import (
     apply_temperature_to_pairs,
     fit_temperature,
 )
+from decisionops.contract import DecisionContract, auto_set_of
 from decisionops.io import align_cases_and_predictions
 from decisionops.metrics import (
     accuracy,
@@ -40,9 +41,10 @@ from decisionops.split import split_pairs
 
 def _curve_payload(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
+    auto_choices: frozenset[str] | None = None,
 ) -> list[dict[str, float | int]]:
     out: list[dict[str, float | int]] = []
-    for p in risk_coverage_curve(pairs):
+    for p in risk_coverage_curve(pairs, auto_choices=auto_choices):
         point: dict[str, float | int] = {
             "threshold": p.threshold,
             "coverage": p.coverage,
@@ -64,6 +66,7 @@ def _pairs_metrics(
     cal_thresholds: list[ThresholdRecommendation] | None = None,
     name: str = "raw",
     temperature: float | None = None,
+    auto_choices: frozenset[str] | None = None,
 ) -> ConditionResult:
     return ConditionResult(
         name=name,
@@ -86,7 +89,7 @@ def _pairs_metrics(
             }
             for b in reliability_bins(pairs, n_bins=n_bins)
         ],
-        risk_coverage=_curve_payload(pairs),
+        risk_coverage=_curve_payload(pairs, auto_choices),
     )
 
 
@@ -238,6 +241,7 @@ def run_gate(
     calibrate: bool = True,
     provider: str | None = None,
     model: str | None = None,
+    contract: DecisionContract | None = None,
 ) -> GateReport:
     """
     Technical gate protocol:
@@ -246,9 +250,16 @@ def run_gate(
     2. Fit temperature (optional) on calibration
     3. Choose risk thresholds on calibration
     4. Report metrics + threshold performance on test only
+
+    With a `contract`, thresholds and risk-coverage count only errors on the
+    automatic choices; escalations are never risk. Calibration metrics (ECE,
+    Brier, NLL) are unaffected — they describe the probabilities, not the policy.
     """
     if target_risks is None:
         target_risks = [0.01, 0.05, 0.10]
+    if contract is not None:
+        contract.validate_data(cases, predictions)
+    auto = auto_set_of(contract)
 
     pairs = align_cases_and_predictions(cases, predictions)
     split = split_pairs(pairs, cal_ratio=cal_ratio, seed=seed)
@@ -271,9 +282,11 @@ def run_gate(
         name: str,
         temperature: float | None = None,
     ) -> ConditionResult:
-        cal_recs = recommend_thresholds(cal_pairs, target_risks=target_risks)
+        cal_recs = recommend_thresholds(cal_pairs, target_risks=target_risks, auto_choices=auto)
         fixed = [(r.target_risk, r.threshold) for r in cal_recs]
-        test_recs = evaluate_fixed_thresholds(test_pairs, target_risks_and_thresholds=fixed)
+        test_recs = evaluate_fixed_thresholds(
+            test_pairs, target_risks_and_thresholds=fixed, auto_choices=auto
+        )
         return _pairs_metrics(
             test_pairs,
             n_bins=n_bins,
@@ -281,6 +294,7 @@ def run_gate(
             cal_thresholds=cal_recs,
             name=name,
             temperature=temperature,
+            auto_choices=auto,
         )
 
     # Raw condition
@@ -339,5 +353,8 @@ def run_gate(
         conditions=conditions,
         verdict=verdict,
         latency=latency_stats(preds_all),
-        metadata={"protocol": "cal_test_split"},
+        metadata={
+            "protocol": "cal_test_split",
+            "contract": contract.summary() if contract is not None else None,
+        },
     )

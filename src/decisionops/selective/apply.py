@@ -10,6 +10,7 @@ def evaluate_fixed_thresholds(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     *,
     target_risks_and_thresholds: list[tuple[float, float]],
+    auto_choices: frozenset[str] | None = None,
 ) -> list[ThresholdRecommendation]:
     """
     Evaluate pre-selected thresholds on `pairs` (typically the test split).
@@ -19,7 +20,7 @@ def evaluate_fixed_thresholds(
     """
     out: list[ThresholdRecommendation] = []
     for target_risk, threshold in target_risks_and_thresholds:
-        point = evaluate_threshold(pairs, threshold)
+        point = evaluate_threshold(pairs, threshold, auto_choices=auto_choices)
         sel_acc = 0.0 if point.n_accepted == 0 else float(point.selective_accuracy)
         sel_risk = 1.0 if point.n_accepted == 0 else float(point.selective_risk)
         out.append(

@@ -15,6 +15,7 @@ from decisionops.conformal.risk_control import (
     certify_threshold,
     evaluate_certified_threshold,
 )
+from decisionops.contract import DecisionContract, auto_set_of
 from decisionops.io import align_cases_and_predictions
 from decisionops.schemas import DecisionCase, DecisionPrediction, SplitInfo
 from decisionops.split import split_pairs
@@ -60,6 +61,7 @@ def run_certification(
     seed: int = 42,
     calibrate: bool = True,
     loss_bound: float = 1.0,
+    contract: DecisionContract | None = None,
 ) -> CertificationReport:
     """
     Three-way split: fit temperature, derive CRC thresholds, verify — on disjoint data.
@@ -68,11 +70,18 @@ def run_certification(
     probabilities optimistically biased, breaks exchangeability with test, and the
     finite-sample guarantee silently fails. `temp_ratio` carves the temperature-fit
     portion out of the non-test data; set `calibrate=False` to skip it entirely.
+
+    With a `contract`, only errors on its automatic choices are risk: the
+    certified quantity becomes the automated miss rate (auto-executed AND wrong,
+    over all traffic). Escalations are free of risk by construction.
     """
     if alphas is None:
         alphas = [0.01, 0.05, 0.10]
     if not 0.0 <= temp_ratio < 1.0:
         raise ValueError(f"temp_ratio must be in [0, 1), got {temp_ratio}")
+    if contract is not None:
+        contract.validate_data(cases, predictions)
+    auto = auto_set_of(contract)
 
     pairs = align_cases_and_predictions(cases, predictions)
     split = split_pairs(pairs, cal_ratio=cal_ratio, seed=seed)
@@ -109,16 +118,24 @@ def run_certification(
 
     levels: list[CertifiedLevel] = []
     for alpha in alphas:
-        cert = certify_threshold(cal_pairs, alpha, loss_bound=loss_bound)
+        cert = certify_threshold(cal_pairs, alpha, loss_bound=loss_bound, auto_choices=auto)
         test_stats = None
         held = None
         if cert.feasible and cert.threshold is not None:
-            test_stats = evaluate_certified_threshold(test_pairs, cert.threshold)
+            test_stats = evaluate_certified_threshold(
+                test_pairs, cert.threshold, auto_choices=auto
+            )
             held = bool(test_stats["joint_error_rate"] <= alpha)
         levels.append(
             CertifiedLevel(certificate=cert, test=test_stats, bound_held_on_test=held)
         )
 
+    if contract is not None:
+        notes.append(
+            f"Contract {contract.name!r}: only auto choices {sorted(contract.auto_set)} "
+            "count as risk; escalations never do. Certified quantity is the automated "
+            "miss rate."
+        )
     notes += [
         "CRC certifies the joint automated error rate, not conditional selective risk.",
         "Guarantee is marginal over calibration and test draws, and assumes exchangeability.",
@@ -155,5 +172,6 @@ def run_certification(
             "loss_bound": loss_bound,
             "temp_ratio": temp_ratio,
             "protocol": "three_way_split_temp_crc_test",
+            "contract": contract.summary() if contract is not None else None,
         },
     )

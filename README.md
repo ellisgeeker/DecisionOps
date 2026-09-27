@@ -6,6 +6,19 @@
 
 Open-source reliability toolkit for **decision models** (routing, triage, choice heads, System-One style models): calibration, selective prediction, and risk-coverage — before you put a confidence threshold into production.
 
+**Where it sits.** DecisionOps certifies the *decision* layer, not the execution layer. A cheap decision model (Jev, Laya, your own head) picks from a closed set of actions with probabilities; DecisionOps tells you when that choice can run automatically and when to escalate to the slow, expensive path — a deep LLM call (Claude, Qwen, DeepSeek) or a human. The certified claim: *at miss rate ≤ α, this many expensive calls are saved.*
+
+Scenarios are described by a **decision contract** (`--contract`): the closed choice set, which choices run automatically, and optional per-path costs. Only errors on the automatic path count as risk; escalating a case that did not need it costs money, not safety. Code review ("does this diff need a deep LLM review?") is one example scenario — ticket triage, risk review, and agent tool-call confirmation use the same contract.
+
+```json
+{
+  "name": "code-review-routing",
+  "choices": ["skip_deep_review", "deep_llm_review", "human_review"],
+  "auto_choices": ["skip_deep_review"],
+  "costs": {"skip_deep_review": 0.0, "deep_llm_review": 0.4, "human_review": 25.0}
+}
+```
+
 ## What we found on real data
 
 Measured on public benchmarks (BANKING77, CLINC OOS) with a local [Laya](https://huggingface.co/convaiinnovations/laya) checkpoint and four sklearn heads. Full protocol and caveats in [docs/findings.md](docs/findings.md).

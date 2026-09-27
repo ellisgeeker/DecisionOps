@@ -12,6 +12,7 @@ from decisionops import __version__
 from decisionops.adapters import StaticFileProvider
 from decisionops.compare import compare_models, load_prediction_sets
 from decisionops.conformal.certify import run_certification
+from decisionops.contract import DecisionContract, load_contract
 from decisionops.eval import evaluate, run_gate
 from decisionops.io import load_dataset
 from decisionops.report import (
@@ -53,6 +54,26 @@ def _parse_risks(value: str) -> list[float]:
 
 
 _PROVIDERS = ("static", "laya")
+
+ContractOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--contract",
+        help="Decision contract JSON. Only its auto_choices count as risk; "
+        "escalations never do.",
+        exists=True,
+        dir_okay=False,
+    ),
+]
+
+
+def _load_contract_option(path: Path | None) -> DecisionContract | None:
+    if path is None:
+        return None
+    try:
+        return load_contract(path)
+    except ValueError as exc:
+        raise typer.BadParameter(f"invalid contract {path}: {exc}") from exc
 
 
 def _load_cases_and_predictions(
@@ -264,6 +285,7 @@ def gate_cmd(
             help="Fit temperature scaling and isotonic regression on cal split.",
         ),
     ] = True,
+    contract: ContractOption = None,
 ) -> None:
     """
     Technical gate: cal/test split, optional temperature + isotonic, held-out metrics.
@@ -285,15 +307,20 @@ def gate_cmd(
         model_dir=model_dir,
         limit=limit,
     )
-    report = run_gate(
-        cases,
-        preds,
-        cal_ratio=cal_ratio,
-        seed=seed,
-        n_bins=n_bins,
-        target_risks=risks,
-        calibrate=calibrate,
-    )
+    decision_contract = _load_contract_option(contract)
+    try:
+        report = run_gate(
+            cases,
+            preds,
+            cal_ratio=cal_ratio,
+            seed=seed,
+            n_bins=n_bins,
+            target_risks=risks,
+            calibrate=calibrate,
+            contract=decision_contract,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     print_gate_report(report, console=console)
 
     if output is not None:
@@ -346,6 +373,7 @@ def compare_cmd(
             "(CRC set is never used for the fit).",
         ),
     ] = 0.2,
+    contract: ContractOption = None,
 ) -> None:
     """
     Compare several prediction sets on one dataset under an identical split.
@@ -367,17 +395,22 @@ def compare_cmd(
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
-    report = compare_models(
-        cases,
-        sets,
-        dataset_name=dataset.parent.name or dataset.stem,
-        cal_ratio=cal_ratio,
-        seed=seed,
-        n_bins=n_bins,
-        target_risks=risks,
-        calibrate=calibrate,
-        temp_ratio=temp_ratio,
-    )
+    decision_contract = _load_contract_option(contract)
+    try:
+        report = compare_models(
+            cases,
+            sets,
+            dataset_name=dataset.parent.name or dataset.stem,
+            cal_ratio=cal_ratio,
+            seed=seed,
+            n_bins=n_bins,
+            target_risks=risks,
+            calibrate=calibrate,
+            temp_ratio=temp_ratio,
+            contract=decision_contract,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     print_comparison_report(report, console=console)
 
     if output is not None:
@@ -443,6 +476,7 @@ def certify_cmd(
         bool,
         typer.Option("--calibrate/--no-calibrate", help="Fit temperature scaling."),
     ] = True,
+    contract: ContractOption = None,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -468,15 +502,20 @@ def certify_cmd(
         model_dir=model_dir,
         limit=limit,
     )
-    report = run_certification(
-        cases,
-        preds,
-        alphas=levels,
-        cal_ratio=cal_ratio,
-        temp_ratio=temp_ratio,
-        seed=seed,
-        calibrate=calibrate,
-    )
+    decision_contract = _load_contract_option(contract)
+    try:
+        report = run_certification(
+            cases,
+            preds,
+            alphas=levels,
+            cal_ratio=cal_ratio,
+            temp_ratio=temp_ratio,
+            seed=seed,
+            calibrate=calibrate,
+            contract=decision_contract,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     print_certification_report(report, console=console)
 
     if output is not None:

@@ -88,12 +88,25 @@ def min_calibration_samples(alpha: float, loss_bound: float = 1.0) -> int:
 
 def _confidence_and_wrong(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
+    auto_choices: frozenset[str] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Confidence and per-case loss mass.
+
+    With a contract, a case predicted as an escalation choice is never
+    auto-accepted, so it carries zero loss at every lambda. Encoding that as
+    confidence = -inf keeps it out of every acceptance set and out of the
+    candidate grid, while `n` still counts it — coverage and joint error stay
+    fractions of *all* traffic.
+    """
     conf = np.array([pred.confidence for _, pred in pairs], dtype=np.float64)
     wrong = np.array(
         [0.0 if pred.prediction == case.label else 1.0 for case, pred in pairs],
         dtype=np.float64,
     )
+    if auto_choices is not None:
+        eligible = np.array([pred.prediction in auto_choices for _, pred in pairs], dtype=bool)
+        conf = np.where(eligible, conf, -np.inf)
     return conf, wrong
 
 
@@ -102,6 +115,7 @@ def certify_threshold(
     alpha: float,
     *,
     loss_bound: float = 1.0,
+    auto_choices: frozenset[str] | None = None,
 ) -> CRCResult:
     """
     Choose the smallest threshold whose CRC bound holds at level `alpha`.
@@ -111,13 +125,18 @@ def certify_threshold(
 
     Candidate thresholds are the distinct calibration confidences; the smallest
     feasible one is returned, which maximises coverage subject to the bound.
+
+    `auto_choices` (from a DecisionContract) restricts acceptance to the cheap
+    path. The loss 1{eligible and conf >= lambda and wrong} is still
+    non-increasing in lambda and bounded by 1, so the CRC guarantee is unchanged;
+    escalations simply never count as loss.
     """
     if not pairs:
         raise ValueError("cannot certify on empty calibration set")
     if not 0.0 < alpha < 1.0:
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
 
-    conf, wrong = _confidence_and_wrong(pairs)
+    conf, wrong = _confidence_and_wrong(pairs, auto_choices)
     n = len(pairs)
     min_n = min_calibration_samples(alpha, loss_bound)
     notes: list[str] = []
@@ -140,7 +159,19 @@ def certify_threshold(
         )
 
     # Rhat is a step function of lambda; steps occur at observed confidences.
-    grid = np.unique(conf)
+    # Escalated cases (-inf) are never candidates.
+    grid = np.unique(conf[np.isfinite(conf)])
+    if grid.size == 0:
+        notes.append("No calibration case is on the automatic path; nothing to certify.")
+        return CRCResult(
+            alpha=alpha,
+            threshold=None,
+            feasible=False,
+            n_calibration=n,
+            min_n_required=min_n,
+            loss_bound=loss_bound,
+            notes=notes,
+        )
     chosen: float | None = None
     chosen_rhat = 0.0
     chosen_bound = 0.0
@@ -200,13 +231,18 @@ def certify_threshold(
         empirical_selective_risk_calibration=sel_risk,
         n_accepted_calibration=n_accepted,
         notes=notes,
-        metadata={"n_grid_candidates": int(grid.size)},
+        metadata={
+            "n_grid_candidates": int(grid.size),
+            "auto_choices": sorted(auto_choices) if auto_choices is not None else None,
+        },
     )
 
 
 def evaluate_certified_threshold(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     threshold: float,
+    *,
+    auto_choices: frozenset[str] | None = None,
 ) -> dict[str, float | int]:
     """
     Measure a certified threshold on held-out data.
@@ -216,7 +252,7 @@ def evaluate_certified_threshold(
     """
     if not pairs:
         raise ValueError("cannot evaluate on empty set")
-    conf, wrong = _confidence_and_wrong(pairs)
+    conf, wrong = _confidence_and_wrong(pairs, auto_choices)
     n = len(pairs)
     accepted = conf >= threshold
     n_accepted = int(accepted.sum())

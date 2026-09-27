@@ -10,13 +10,53 @@ incomplete. Written so it is usable after a gap of days or weeks.
 
 ## Pick up here tomorrow
 
-**OpenAI-compatible adapter** (DeepSeek etc.). Needs a probability-source
-decision: `logprobs`/`top_logprobs`, structured self-reported probabilities, or
-repeated sampling. The first is most credible; none has been tested. Requires
-an API key and a cost budget.
+Roadmap item 4: cost + offline cascade simulation. Contract `costs` are
+already parsed and validated but not used in any report yet.
 
-Alternatively: fine-tune Laya and re-measure on the same banking77/clinc
-protocol — the largest open question about the model.
+Items 1–3 are done: README/status positioning, `contract.py`, and
+`--contract` on gate / compare / certify with asymmetric risk.
+
+## Product positioning (decided 2026-09-26)
+
+- **DecisionOps certifies the decision layer, not the execution layer.** The
+  certified model is a cheap decision model (Jev, Laya, a customer's own head)
+  that outputs a closed-set choice with probabilities. Claude / Qwen / DeepSeek
+  sit *behind* it as expensive executors, called only on escalation. Their
+  chat-style confidence is not what gets calibrated.
+- **The core question is routing:** "is this case worth sending down the slower,
+  more expensive path?" The certified claim is: at miss rate ≤ α, this many
+  expensive calls are saved.
+- **Risk is asymmetric.** Only errors on the automatic (cheap) path are risk.
+  Escalating a case that did not need it costs money, not safety.
+- **Code review is one showcase scenario, not the product.** Example: does this
+  diff need a deep LLM review? The same contract describes ticket triage, risk
+  review, and agent tool-call confirmation. Scenario specifics live in
+  `examples/`, never in the core.
+
+## Roadmap (ordered)
+
+1. ~~Positioning in README / status~~ — done.
+2. ~~Decision contract schema + validator~~ — done: `src/decisionops/contract.py`.
+3. ~~Asymmetric risk~~ — done: with `--contract`, selective / CRC / gate /
+   compare count only auto-path errors. The loss
+   `1{auto-eligible ∧ conf ≥ λ ∧ wrong}` stays monotone and bounded, so the CRC
+   guarantee is unchanged. Closed-form test in `tests/test_contract.py`: the
+   asymmetric rule lands +0.010 above λ*; a symmetric rule leaking escalation
+   errors lands +0.258 above and fails. No contract = previous behaviour.
+4. **Cost + offline cascade simulation** (pulled forward from V0.5) — the
+   "cost saved vs miss rate" curve, which is the headline value.
+5. **Certified profile + `decide()`** — turn an offline certificate into a
+   runtime call: `decide(prediction, profile) → AUTO / ESCALATE`.
+6. **Code review example pack** — small synthetic data, labelling guide (where
+   ground truth comes from: human-confirmed deep-review findings, reverts,
+   incidents), one end-to-end report.
+7. **Decision-backend adapters** — generic HTTP provider (any model returning
+   choice + probabilities), then TypeSafe Jev.
+8. **Execution-layer LLMs** (Claude / Qwen / DeepSeek) — escalation targets in
+   cascade / gateway only, never the calibration target.
+9. **Thin gate** — GitHub Action first, then a gateway (`POST /v1/decision`).
+10. **Wrap-up** — v0.1.0 release, CRC `confidence_level` API, outcome feedback,
+    drift, recertification.
 
 ---
 
@@ -76,7 +116,7 @@ in tree.
 
 ### Validation performed
 
-- **55 tests passing**, ruff clean.
+- **70 tests passing**, ruff clean.
 
 - CRC correctness is now a **regression test** (`tests/test_crc_analytic.py`):
   60 fresh pools, n_cal=150 so `B/(n+1)` is a visible share of α, `λ̂` compared
@@ -94,22 +134,14 @@ in tree.
 
 ## Not done
 
-### Next up (small, unblocked)
+See **Roadmap** above for the ordered work. Beyond it:
 
-1. **OpenAI-compatible adapter (DeepSeek etc.).** Needs a probability-source
-   decision (see "Pick up here").
+- **Fine-tune Laya and re-measure** — model research, not on the product path.
+- **Isotonic in `compare` / `certify`** — gate has the contrast; CRC still uses
+  temperature only, intentional for V1.
+- **"LLM as decision model" adapter** — possible later as a compatibility path,
+  but reports must mark it uncalibrated.
 
 M0 (git + Apache-2.0 LICENSE + GitHub Actions + 85% coverage gate) is done.
 Large regenerated HF JSONL packs are gitignored; rebuild with
 `scripts/prepare_hf_intent_gates.py`. Remote GitHub repo not created yet.
-
-### Later (larger)
-
-2. **Cascade simulation.** Offline only. Needs at least two providers with
-   genuinely different risk-coverage curves.
-3. **Fine-tune Laya and re-measure.** The single largest open question about the
-   model (see Known gaps).
-4. **Production gateway, outcome feedback, drift, recertification.** Deliberately
-   deferred. Each depends on an outcome pipeline that does not exist.
-5. **Isotonic in `compare` / `certify`.** Gate has the contrast; comparison entry
-   and CRC still use temperature only — intentional for V1.

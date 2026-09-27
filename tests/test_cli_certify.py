@@ -124,6 +124,43 @@ def test_certify_applies_temperature_on_a_disjoint_slice(tmp_path):
     assert "disjoint from the CRC set" in result.output
 
 
+def test_certify_with_contract_labels_miss_rate(tmp_path):
+    dataset, predictions = _write_pool(tmp_path, 400)
+    contract = tmp_path / "contract.json"
+    contract.write_text(
+        json.dumps({"name": "fixture", "choices": ["a", "b"], "auto_choices": ["a"]}),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+
+    result = runner.invoke(
+        app,
+        [
+            "certify", str(dataset), "-p", str(predictions),
+            "--contract", str(contract), "--alphas", "0.10",
+            "--no-calibrate", "-o", str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "automated miss rate" in result.output
+    payload = json.loads((out / "certification_report.json").read_text(encoding="utf-8"))
+    assert payload["metadata"]["contract"]["auto_choices"] == ["a"]
+
+
+def test_certify_rejects_contract_that_does_not_fit_data(tmp_path):
+    dataset, predictions = _write_pool(tmp_path, 120)
+    contract = tmp_path / "contract.json"
+    contract.write_text(
+        json.dumps({"name": "wrong", "choices": ["x", "y"], "auto_choices": ["x"]}),
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app, ["certify", str(dataset), "-p", str(predictions), "--contract", str(contract)]
+    )
+    assert result.exit_code != 0
+    assert "does not fit contract" in result.output
+
+
 def test_certify_rejects_out_of_range_ratios(tmp_path):
     dataset, predictions = _write_pool(tmp_path, 120)
     for flag, value in [("--cal-ratio", "1.0"), ("--temp-ratio", "1.0"), ("--alphas", "1.5")]:

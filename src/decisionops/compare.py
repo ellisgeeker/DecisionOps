@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from decisionops.conformal.certify import CertificationReport, run_certification
+from decisionops.contract import DecisionContract
 from decisionops.eval import run_gate
 from decisionops.io import load_dataset, load_predictions
 from decisionops.schemas import (
@@ -95,6 +96,7 @@ def compare_models(
     target_risks: list[float] | None = None,
     calibrate: bool = True,
     temp_ratio: float = 0.2,
+    contract: DecisionContract | None = None,
 ) -> ComparisonReport:
     """
     Run gate + CRC on every prediction set under one shared split seed.
@@ -123,6 +125,7 @@ def compare_models(
             n_bins=n_bins,
             target_risks=target_risks,
             calibrate=calibrate,
+            contract=contract,
         )
         cert = run_certification(
             cases,
@@ -132,6 +135,7 @@ def compare_models(
             temp_ratio=temp_ratio if calibrate else 0.0,
             seed=seed,
             calibrate=calibrate,
+            contract=contract,
         )
         split_info = report.split
         n_crc_cal = cert.split.n_calibration
@@ -203,6 +207,7 @@ def compare_models(
             ),
             "n_feasible_by_risk": feasible_counts,
             "certified_quantity": "joint_automated_error_rate",
+            "contract": contract.summary() if contract is not None else None,
         },
     )
 

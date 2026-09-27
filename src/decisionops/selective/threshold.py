@@ -30,15 +30,38 @@ def _confidence_and_correct(
     return conf, correct
 
 
+def auto_eligible(
+    pairs: list[tuple[DecisionCase, DecisionPrediction]],
+    auto_choices: frozenset[str] | None,
+) -> np.ndarray:
+    """
+    Which cases *could* be auto-executed: the predicted choice is on the cheap path.
+
+    With no contract (`auto_choices=None`) every prediction is eligible, which is
+    the original symmetric behaviour. With a contract, a prediction of an
+    escalation choice is never auto-accepted, so its errors are not risk.
+    """
+    if auto_choices is None:
+        return np.ones(len(pairs), dtype=bool)
+    return np.array([pred.prediction in auto_choices for _, pred in pairs], dtype=bool)
+
+
 def evaluate_threshold(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     threshold: float,
+    *,
+    auto_choices: frozenset[str] | None = None,
 ) -> RiskCoveragePoint:
-    """Accept when max probability >= threshold."""
+    """
+    Accept when the prediction is auto-eligible and max probability >= threshold.
+
+    Coverage is the share of all cases executed automatically; selective risk is
+    the error rate among those. Escalated cases never count as errors.
+    """
     if not pairs:
         raise ValueError("cannot evaluate threshold on empty input")
     conf, correct = _confidence_and_correct(pairs)
-    accepted = conf >= threshold
+    accepted = auto_eligible(pairs, auto_choices) & (conf >= threshold)
     n_total = len(pairs)
     n_accepted = int(accepted.sum())
     if n_accepted == 0:
@@ -64,30 +87,34 @@ def evaluate_threshold(
 def risk_coverage_curve(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     thresholds: list[float] | None = None,
+    *,
+    auto_choices: frozenset[str] | None = None,
 ) -> list[RiskCoveragePoint]:
     """Sweep confidence thresholds and compute risk/coverage points."""
     if thresholds is None:
         thresholds = [round(x, 2) for x in np.arange(0.50, 1.00, 0.01)] + [0.99, 1.0]
         # unique + sorted
         thresholds = sorted(set(float(t) for t in thresholds))
-    return [evaluate_threshold(pairs, t) for t in thresholds]
+    return [evaluate_threshold(pairs, t, auto_choices=auto_choices) for t in thresholds]
 
 
 def recommend_thresholds(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     target_risks: list[float] | None = None,
+    *,
+    auto_choices: frozenset[str] | None = None,
 ) -> list[ThresholdRecommendation]:
     """
     For each target risk α, pick the *lowest* threshold whose empirical
     selective risk on this set is <= α (maximizes coverage under the constraint).
 
     Note: this is an empirical operating point on the evaluation set, not a
-    conformal certificate. CRC lands in a later milestone.
+    conformal certificate; `decisionops.conformal` provides the certified path.
     """
     if target_risks is None:
         target_risks = [0.01, 0.05, 0.10]
 
-    curve = risk_coverage_curve(pairs)
+    curve = risk_coverage_curve(pairs, auto_choices=auto_choices)
     # Sort by increasing threshold so we can scan for feasible points.
     curve_sorted = sorted(curve, key=lambda p: p.threshold)
 
