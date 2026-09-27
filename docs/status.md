@@ -10,8 +10,10 @@ incomplete. Written so it is usable after a gap of days or weeks.
 
 ## Pick up here tomorrow
 
-Roadmap item 4: cost + offline cascade simulation. Contract `costs` are
-already parsed and validated but not used in any report yet.
+Roadmap item 4: **`train-screener`** — promote the sklearn-head prototype in
+`scripts/prepare_hf_intent_gates.py` into a first-class command that takes a
+customer's labelled history and emits a screener + certificate. Without a
+usable screener, the cost curve in item 5 has nothing meaningful to show.
 
 Items 1–3 are done: README/status positioning, `contract.py`, and
 `--contract` on gate / compare / certify with asymmetric risk.
@@ -43,19 +45,25 @@ Items 1–3 are done: README/status positioning, `contract.py`, and
    guarantee is unchanged. Closed-form test in `tests/test_contract.py`: the
    asymmetric rule lands +0.010 above λ*; a symmetric rule leaking escalation
    errors lands +0.258 above and fails. No contract = previous behaviour.
-4. **Cost + offline cascade simulation** (pulled forward from V0.5) — the
-   "cost saved vs miss rate" curve, which is the headline value.
-5. **Certified profile + `decide()`** — turn an offline certificate into a
+4. **`train-screener`** — first-class product path: customer labelled history →
+   fit a cheap screener → calibrate → CRC-certify. Promote
+   `scripts/prepare_hf_intent_gates.py` out of `scripts/`. Without this, most
+   customers have no decision model to put in front of the expensive LLM.
+5. **Cost + offline cascade simulation** (pulled forward from V0.5) — the
+   "cost saved vs miss rate" curve. Needs a usable screener (item 4) to be
+   meaningful; contract `costs` are already parsed.
+6. **Certified profile + `decide()`** — turn an offline certificate into a
    runtime call: `decide(prediction, profile) → AUTO / ESCALATE`.
-6. **Code review example pack** — small synthetic data, labelling guide (where
+7. **Code review example pack** — small synthetic data, labelling guide (where
    ground truth comes from: human-confirmed deep-review findings, reverts,
    incidents), one end-to-end report.
-7. **Decision-backend adapters** — generic HTTP provider (any model returning
-   choice + probabilities), then TypeSafe Jev.
-8. **Execution-layer LLMs** (Claude / Qwen / DeepSeek) — escalation targets in
+8. **Decision-backend adapters** — TypeSafe Jev first (hosted API, choice +
+   probabilities already match `DecisionPrediction`), then a generic HTTP
+   provider. Offline JSONL path already works without either.
+9. **Execution-layer LLMs** (Claude / Qwen / DeepSeek) — escalation targets in
    cascade / gateway only, never the calibration target.
-9. **Thin gate** — GitHub Action first, then a gateway (`POST /v1/decision`).
-10. **Wrap-up** — v0.1.0 release, CRC `confidence_level` API, outcome feedback,
+10. **Thin gate** — GitHub Action first, then a gateway (`POST /v1/decision`).
+11. **Wrap-up** — v0.1.0 release, CRC `confidence_level` API, outcome feedback,
     drift, recertification.
 
 ---
