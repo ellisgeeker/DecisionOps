@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-23 (Laya temperature guard fixed; next is weighted-loss CRC, then v0.1.0)
+**Last updated:** 2026-10-23 (weighted-loss CRC via contract severity; next is the v0.1.0 release)
 **Version:** 0.1.0a1 (unreleased)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,20 +16,14 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: roadmap #11.2 — weighted (severity) loss in CRC**, then the v0.1.0
-release. Decided 2026-10-23: weighted loss goes *into* v0.1 because it changes
-contract and profile semantics; shipping 0-1 only and adding it later would be
-a breaking change. Today CRC counts every auto-path miss as 1, so "auto-skipped
-something that needed a human" weighs the same as "auto-skipped something that
-needed an LLM review"; contract `costs` feed only `cascade`.
+**Next: roadmap #11.3 — v0.1.0 release.** The rest of the label loop
+(feedback format, `recertify`, drift monitor) is 0.1.x; see *Label strategy*.
 
 Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 
-1. ~~Laya builtin-temperature guard~~ — done 2026-10-23, below.
-2. Weighted-loss CRC (contract-level per-miss severity, bounded loss `B`;
-   high-probability mode stays 0-1 only unless a bound for bounded losses is
-   added).
-3. v0.1.0 release.
+1. ~~Laya builtin-temperature guard~~ — done 2026-10-23.
+2. ~~Weighted-loss CRC~~ — done 2026-10-23, below.
+3. v0.1.0 release — **next**.
 4. Feedback format + `recertify` from audit rows only; validate with simulated
    drift on benchmark pools.
 5. Certified conditional (selective) risk via Learn-Then-Test; certified
@@ -40,6 +34,27 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 Real-traffic validation follows the loop, so it tests the whole mechanism.
 Isotonic in CRC is **not** planned: it is monotone, so it does not reorder
 confidence, and CRC depends only on the order.
+
+Done 2026-10-23 — weighted (severity) loss in CRC:
+
+- Contract field `severity: {true_label: weight}` is separate from `costs`.
+  A miss on the automatic path contributes `severity.get(y, 1.0)`; omitted
+  labels default to 1.0; empty map is plain 0-1 loss. `B = max severity`
+  (or 1). Keys must be contract choices; values must be > 0.
+- Granularity is **per true label**, not per prediction: the motivating case
+  is a single auto choice (`skip`) where "needed a human" and "needed an LLM"
+  differ only in the true label. Decided after first proposing per-prediction
+  severity and noticing it collapses on that contract.
+- `fingerprint()` covers severity (changing it invalidates a profile); costs
+  still do not. `run_certification` derives `loss_bound` from the contract
+  unless an explicit override is passed. High-probability mode still requires
+  0-1 loss and rejects fractional / non-unit severity.
+- Controlled quantity becomes `weighted_joint_automated_error` when severity
+  is set. Example: `examples/contracts/code-review-routing.json`
+  (`human_review: 5`, `deep_llm_review: 1`).
+- Tests: schema + fingerprint, CRC raises the bar when a high-severity miss
+  sits at the same confidence as a low-severity one, HP refuses weighted
+  loss, `run_certification` picks up B from the contract.
 
 Done 2026-10-23 — Laya builtin-temperature guard:
 
@@ -146,9 +161,9 @@ Just finished — roadmap #6, certified profile + `decide()` (`src/decisionops/d
   `certified` / `below_threshold` / `escalate_choice` / `outside_contract`.
 - Mismatch guards: a prediction tagged with another `model` raises
   `ProfileMismatchError`, and so does a contract whose `fingerprint()` differs.
-  The fingerprint covers choices, auto set, descriptions, instructions and
-  yes_choice; changing costs does not invalidate it. The file has a
-  `schema_version`.
+  The fingerprint covers choices, auto set, severity, descriptions,
+  instructions and yes_choice; changing costs does not invalidate it. The
+  file has a `schema_version`.
 - `decisionops decide PROFILE -p preds.jsonl [--contract] [-o decisions.jsonl]`
   is the offline smoke. Toy pack @10%: T=1.137, λ̂=0.853, 52/120 AUTO.
 - Regression test `test_decide_reproduces_certified_test_numbers`: `decide()`
@@ -240,8 +255,8 @@ is dropped from the roadmap.
 11. **Wrap-up** — in progress. ~~CRC `confidence_level` API~~ done
     2026-09-27. Remaining, in order:
     1. ~~**Audit sampling in `decide()`**~~ — done 2026-10-23.
-    2. **Weighted-loss CRC** — **next**, in v0.1 (decided 2026-10-23).
-    3. **v0.1.0 release** — remote repo, top-level public API
+    2. ~~**Weighted-loss CRC**~~ — done 2026-10-23 (`contract.severity`).
+    3. **v0.1.0 release** — **next** — remote repo, top-level public API
        (`decide`, `run_certification`, `load_profile`, …), delete dead
        `report/json_report.py`, bump `0.1.0a1` → `0.1.0`, changelog, tag.
     4. **0.1.x: closing the label loop** — outcome feedback format,
@@ -326,7 +341,7 @@ Work items:
 | Selective prediction | `selective/` | Threshold sweep, risk-coverage, held-out threshold application |
 | Conformal Risk Control | `conformal/` | Angelopoulos et al.; validated (see below) |
 | Model comparison | `compare.py` | Shared split; ranks by CRC-certified coverage; empirical `!` kept as contrast |
-| Decision contract | `contract.py` | Closed-set choices, auto-set, costs, yes_choice; asymmetric risk for CRC/gate |
+| Decision contract | `contract.py` | Closed-set choices, auto-set, costs, severity (true-label miss weight), yes_choice; asymmetric + weighted risk for CRC/gate |
 | Offline cascade | `cascade.py` | Cost-saved vs joint miss-rate curve; oracle escalate pricing; needs contract costs |
 | Runtime decide | `decide.py` | `CertificationProfile` from a certify report; `decide()` → AUTO/ESCALATE; model + contract-hash guards |
 | Reports | `report/` | Rich console + JSON + self-contained HTML (reliability, risk-coverage, cascade cost curve) |
@@ -396,7 +411,7 @@ in tree.
 
 ### Validation performed
 
-- **153 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **158 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).

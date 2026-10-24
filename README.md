@@ -8,14 +8,15 @@ Open-source reliability toolkit for **decision models** (routing, triage, choice
 
 **Where it sits.** DecisionOps certifies the *decision* layer, not the execution layer. A cheap decision model (Jev, Laya, your own head) picks from a closed set of actions with probabilities; DecisionOps tells you when that choice can run automatically and when to escalate to the slow, expensive path — a deep LLM call (Claude, Qwen, DeepSeek) or a human. The certified claim: *at an expected miss rate ≤ α, this many expensive calls are saved.* By default that bound holds on average over calibration draws (Conformal Risk Control), so any single certificate can land slightly above α. For a per-certificate guarantee, `certify --confidence-level 0.95` gives *miss rate ≤ α with 95% confidence*, at the cost of lower coverage and more calibration data.
 
-Scenarios are described by a **decision contract** (`--contract`): the closed choice set, which choices run automatically, and optional per-path costs. Only errors on the automatic path count as risk; escalating a case that did not need it costs money, not safety. Code review ("does this diff need a deep LLM review?") is one example scenario — ticket triage, risk review, and agent tool-call confirmation use the same contract.
+Scenarios are described by a **decision contract** (`--contract`): the closed choice set, which choices run automatically, optional per-path costs, and optional per-true-label miss severities. Only errors on the automatic path count as risk; escalating a case that did not need it costs money, not safety. `costs` price taking a path (cascade); `severity` weights an auto-path miss by its *true* label, so auto-skipping something that needed a human can cost more than auto-skipping something that needed an LLM. Code review ("does this diff need a deep LLM review?") is one example scenario — ticket triage, risk review, and agent tool-call confirmation use the same contract.
 
 ```json
 {
   "name": "code-review-routing",
   "choices": ["skip_deep_review", "deep_llm_review", "human_review"],
   "auto_choices": ["skip_deep_review"],
-  "costs": {"skip_deep_review": 0.0, "deep_llm_review": 0.4, "human_review": 25.0}
+  "costs": {"skip_deep_review": 0.0, "deep_llm_review": 0.4, "human_review": 25.0},
+  "severity": {"deep_llm_review": 1.0, "human_review": 5.0}
 }
 ```
 
@@ -64,6 +65,7 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Certified profile + runtime `decide()` (`certify --profile`, `decide`) | done |
 | Generic HTTP decision provider (`--provider http`) | done |
 | High-probability certificates (`certify --confidence-level`) | done |
+| Weighted-loss CRC (`contract.severity`) | done |
 | v0.1.0 release | next |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
@@ -345,7 +347,7 @@ zero errors it needs `n ≥ ln(δ)/ln(1−α)`, which is 299 samples at α=1% an
 95% confidence (CRC needs 99). Reports and profiles record which guarantee
 was issued.
 
-What is certified is the **joint automated error rate** — the share of *all*
+What is certified is the **joint automated error** (severity-weighted when the contract sets `severity`) — the share of *all*
 traffic auto-accepted *and* wrong — bounded by `α` in expectation. Not the
 conditional selective risk `gate` reports. Levels where the calibration set is too
 small (`α ≥ B/(n+1)` fails) or where no threshold holds `α` are reported

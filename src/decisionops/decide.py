@@ -126,7 +126,8 @@ class CertificationProfile(BaseModel):
         if contract.fingerprint() != self.contract_hash:
             raise ProfileMismatchError(
                 f"contract {contract.name!r} differs from the certified one "
-                "(choices, auto set, descriptions or instructions changed); recertify"
+                "(choices, auto set, severity, descriptions or instructions "
+                "changed); recertify"
             )
 
 

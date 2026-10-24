@@ -10,8 +10,14 @@ never counts as risk; only an automatic action that turns out wrong does.
       "name": "code-review-routing",
       "choices": ["skip_deep_review", "deep_llm_review", "human_review"],
       "auto_choices": ["skip_deep_review"],
-      "costs": {"skip_deep_review": 0.0, "deep_llm_review": 0.4, "human_review": 25.0}
+      "costs": {"skip_deep_review": 0.0, "deep_llm_review": 0.4, "human_review": 25.0},
+      "severity": {"deep_llm_review": 1.0, "human_review": 5.0}
     }
+
+`costs` price taking a path (cascade reporting). `severity` weights an
+auto-path miss by its *true* label: auto-skipping a case that needed a human
+can cost more than auto-skipping one that needed an LLM. Omitted labels
+default to 1.0; an empty map is plain 0-1 loss.
 
 The contract is scenario data, not code: code review, ticket triage, and agent
 tool-call confirmation are all expressed with the same schema.
@@ -37,6 +43,16 @@ class DecisionContract(BaseModel):
 
     costs: dict[str, float] = Field(default_factory=dict)
     """Optional per-choice cost of taking that path (any unit, used for reporting)."""
+
+    severity: dict[str, float] = Field(default_factory=dict)
+    """
+    Optional per-true-label weight of an automatic miss.
+
+    When the cheap path predicts wrong and the true label is `y`, the CRC loss
+    is `severity.get(y, 1.0)` instead of 1. Keys must be contract choices;
+    values must be > 0. Empty means every miss weighs 1 (0-1 loss). Part of the
+    certificate: changing severity means recertify.
+    """
 
     descriptions: dict[str, str] = Field(default_factory=dict)
     """
@@ -73,6 +89,16 @@ class DecisionContract(BaseModel):
         negative = sorted(k for k, v in self.costs.items() if v < 0)
         if negative:
             raise ValueError(f"contract {self.name!r}: negative costs for {negative}")
+        unknown_sev = sorted(set(self.severity) - set(self.choices))
+        if unknown_sev:
+            raise ValueError(
+                f"contract {self.name!r}: severity for unknown choices: {unknown_sev}"
+            )
+        nonpositive = sorted(k for k, v in self.severity.items() if v <= 0)
+        if nonpositive:
+            raise ValueError(
+                f"contract {self.name!r}: severity must be > 0 for {nonpositive}"
+            )
         unknown_desc = sorted(set(self.descriptions) - set(self.choices))
         if unknown_desc:
             raise ValueError(
@@ -98,6 +124,21 @@ class DecisionContract(BaseModel):
     def escalate_choices(self) -> list[str]:
         return [c for c in self.choices if c not in self.auto_set]
 
+    def miss_severity(self, label: str) -> float:
+        """Loss mass of one automatic miss whose true label is `label`."""
+        return float(self.severity.get(label, 1.0))
+
+    def loss_bound(self) -> float:
+        """
+        Upper bound B on per-example CRC loss.
+
+        Max severity over the choice set (missing keys count as 1). Empty
+        severity is plain 0-1 loss, so B = 1.
+        """
+        if not self.severity:
+            return 1.0
+        return max(self.miss_severity(choice) for choice in self.choices)
+
     def summary(self) -> dict[str, object]:
         """Compact form for report metadata."""
         return {
@@ -106,6 +147,7 @@ class DecisionContract(BaseModel):
             "auto_choices": list(self.auto_choices),
             "escalate_choices": self.escalate_choices,
             "costs": dict(self.costs),
+            "severity": dict(self.severity),
             # Model input that was certified; a change here means recertify.
             "descriptions": dict(self.descriptions),
             "instructions": self.instructions,
@@ -116,14 +158,15 @@ class DecisionContract(BaseModel):
         """
         SHA-256 over every field a certificate depends on.
 
-        Covers the choice set, the auto/escalate split, and the model input
-        (descriptions, instructions, yes_choice). Costs, name and description are
-        excluded: they price or label decisions but change neither what the model
-        sees nor which errors count as risk.
+        Covers the choice set, the auto/escalate split, miss severities, and the
+        model input (descriptions, instructions, yes_choice). Costs, name and
+        description are excluded: they price or label decisions but change
+        neither what the model sees nor which errors count as risk.
         """
         payload = {
             "choices": list(self.choices),
             "auto_choices": sorted(self.auto_choices),
+            "severity": dict(sorted(self.severity.items())),
             "descriptions": dict(sorted(self.descriptions.items())),
             "instructions": self.instructions,
             "yes_choice": self.yes_choice,

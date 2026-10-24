@@ -216,10 +216,23 @@ def print_certification_report(
         )
     else:
         console.print(r"guarantee: in expectation — E\[joint error] <= alpha (CRC)")
+    loss_bound = (report.metadata or {}).get("loss_bound")
+    contract_meta = (report.metadata or {}).get("contract") or {}
+    severity = contract_meta.get("severity") or {}
+    if loss_bound is not None and (float(loss_bound) != 1.0 or severity):
+        sev_txt = (
+            ", ".join(f"{k}={v:g}" for k, v in sorted(severity.items()))
+            if severity
+            else "uniform 1"
+        )
+        console.print(
+            f"loss bound B={float(loss_bound):g}  "
+            f"(miss severity by true label: {sev_txt})"
+        )
     console.print()
 
     cert = Table(
-        title="Certified thresholds (joint automated error rate <= alpha)",
+        title="Certified thresholds (joint automated error <= alpha)",
         show_header=True,
         header_style="bold",
     )

@@ -1,0 +1,14 @@
+{
+  "name": "code-review-routing",
+  "description": "Skip vs LLM vs human. Auto-execute skip; escalate everything else. severity weights a miss by its true label.",
+  "choices": ["skip_deep_review", "deep_llm_review", "human_review"],
+  "auto_choices": ["skip_deep_review"],
+  "costs": {"skip_deep_review": 0.0, "deep_llm_review": 0.4, "human_review": 25.0},
+  "severity": {"deep_llm_review": 1.0, "human_review": 5.0},
+  "instructions": "Does this diff need a deeper review before merging?",
+  "descriptions": {
+    "skip_deep_review": "Safe to skip the expensive review.",
+    "deep_llm_review": "Needs a deep LLM review.",
+    "human_review": "Needs a human reviewer."
+  }
+}

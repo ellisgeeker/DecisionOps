@@ -51,6 +51,47 @@ def test_contract_rejects_duplicates_unknown_and_negative_costs():
         DecisionContract(name="x", choices=["a", "b"], auto_choices=["a"], costs={"b": -1})
 
 
+def test_contract_rejects_unknown_and_nonpositive_severity():
+    with pytest.raises(ValidationError, match="severity for unknown choices"):
+        DecisionContract(
+            name="x", choices=["a", "b"], auto_choices=["a"], severity={"z": 2.0}
+        )
+    with pytest.raises(ValidationError, match="severity must be > 0"):
+        DecisionContract(
+            name="x", choices=["a", "b"], auto_choices=["a"], severity={"b": 0.0}
+        )
+    with pytest.raises(ValidationError, match="severity must be > 0"):
+        DecisionContract(
+            name="x", choices=["a", "b"], auto_choices=["a"], severity={"b": -1.0}
+        )
+
+
+def test_severity_defaults_and_loss_bound():
+    assert ROUTING.miss_severity("deep") == 1.0
+    assert ROUTING.loss_bound() == 1.0
+    weighted = DecisionContract(
+        name="triage",
+        choices=["skip", "llm", "human"],
+        auto_choices=["skip"],
+        severity={"llm": 1.0, "human": 5.0},
+    )
+    assert weighted.miss_severity("skip") == 1.0
+    assert weighted.miss_severity("llm") == 1.0
+    assert weighted.miss_severity("human") == 5.0
+    assert weighted.loss_bound() == 5.0
+    assert weighted.summary()["severity"] == {"llm": 1.0, "human": 5.0}
+
+
+def test_fingerprint_covers_severity_not_costs():
+    base = ROUTING.fingerprint()
+    # Costs are reporting-only: changing them must not invalidate a certificate.
+    assert ROUTING.model_copy(update={"costs": {"skip": 0.0, "deep": 9.0}}).fingerprint() == base
+    # Severity changes the certified loss, so the fingerprint must move.
+    assert (
+        ROUTING.model_copy(update={"severity": {"deep": 2.0}}).fingerprint() != base
+    )
+
+
 def test_escalate_choices_are_the_complement():
     assert ROUTING.escalate_choices == ["deep"]
 
@@ -208,6 +249,107 @@ def test_asymmetric_crc_stays_conservative_against_closed_form():
 
 
 # --------------------------------------------------------- end to end
+
+
+
+
+def test_severity_weights_crc_loss_and_raises_bound():
+    """
+    Two equal-confidence misses, different true labels.
+
+    With severity human=5 / llm=1, the human miss contributes 5× the loss mass,
+    so the CRC bound needs a higher threshold (or becomes infeasible sooner)
+    than plain 0-1 loss on the same pairs. B becomes 5, so min_n grows with it.
+    """
+    from decisionops.conformal import min_calibration_samples
+
+    triage = DecisionContract(
+        name="triage",
+        choices=["skip", "llm", "human"],
+        auto_choices=["skip"],
+        severity={"llm": 1.0, "human": 5.0},
+    )
+    assert triage.loss_bound() == 5.0
+    assert min_calibration_samples(0.05, triage.loss_bound()) == 99  # 5/0.05 - 1
+
+    def _triage_pair(cid: str, pred: str, label: str, conf: float):
+        others = [c for c in triage.choices if c != pred]
+        rem = (1.0 - conf) / len(others)
+        return (
+            DecisionCase(id=cid, choices=list(triage.choices), label=label),
+            DecisionPrediction(
+                id=cid,
+                prediction=pred,
+                probabilities={pred: conf, **{o: rem for o in others}},
+            ),
+        )
+
+    # 100 correct skips at conf 0.95, plus one llm miss and one human miss at 0.90.
+    pairs = [_triage_pair(f"ok{i}", "skip", "skip", 0.95) for i in range(100)]
+    pairs += [
+        _triage_pair("miss_llm", "skip", "llm", 0.90),
+        _triage_pair("miss_human", "skip", "human", 0.90),
+    ]
+    plain = certify_threshold(pairs, alpha=0.05, auto_choices=triage.auto_set)
+    weighted = certify_threshold(
+        pairs,
+        alpha=0.05,
+        auto_choices=triage.auto_set,
+        severity_of=triage.miss_severity,
+        loss_bound=triage.loss_bound(),
+    )
+    assert plain.feasible and plain.threshold is not None
+    # At lambda=0.90 both misses are accepted: plain Rhat=2/102, weighted Rhat=6/102.
+    # With B=5 the weighted bound is much larger, so the rule must raise the bar
+    # past the miss confidences (or become infeasible).
+    assert weighted.loss_bound == 5.0
+    if weighted.feasible:
+        assert weighted.threshold is not None
+        assert weighted.threshold > plain.threshold
+        assert weighted.threshold > 0.90
+    # High-probability mode refuses non-0-1 severity weights.
+    with pytest.raises(ValueError, match="0-1 loss"):
+        certify_threshold(
+            pairs,
+            alpha=0.05,
+            auto_choices=triage.auto_set,
+            severity_of=triage.miss_severity,
+            loss_bound=triage.loss_bound(),
+            confidence_level=0.95,
+        )
+
+
+def test_run_certification_picks_up_contract_severity():
+    triage = DecisionContract(
+        name="triage",
+        choices=["skip", "llm", "human"],
+        auto_choices=["skip"],
+        severity={"human": 4.0},
+    )
+    cases, preds = [], []
+    for i in range(200):
+        conf = 0.7 + (i % 30) / 100.0
+        label = "skip" if i % 5 else ("human" if i % 2 == 0 else "llm")
+        pred = "skip" if conf >= 0.75 else "llm"
+        others = [c for c in triage.choices if c != pred]
+        rem = (1.0 - conf) / len(others)
+        cases.append(DecisionCase(id=str(i), choices=list(triage.choices), label=label))
+        preds.append(
+            DecisionPrediction(
+                id=str(i),
+                prediction=pred,
+                probabilities={pred: conf, **{o: rem for o in others}},
+            )
+        )
+    report = run_certification(
+        cases, preds, alphas=[0.1], contract=triage, calibrate=False, seed=1
+    )
+    assert report.metadata["loss_bound"] == 4.0
+    assert report.metadata["contract"]["severity"] == {"human": 4.0}
+    assert any("severity" in n.lower() or "B=" in n for n in report.notes)
+    level = report.levels[0]
+    assert level.certificate.loss_bound == 4.0
+    assert level.certificate.controlled_quantity == "weighted_joint_automated_error"
 
 
 def test_gate_and_certify_record_contract(tmp_path):

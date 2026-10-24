@@ -469,7 +469,7 @@ def _cert_html(report: CertificationReport) -> str:
         <h1>DecisionOps certification (CRC)</h1>
         <p class="sub">n_crc_cal={report.split.n_calibration} n_test={report.split.n_test}
           seed={report.split.seed}. Certified quantity is the
-          <strong>joint automated error rate</strong>, not selective risk.
+          <strong>joint automated error</strong> (severity-weighted when the contract sets severity), not selective risk.
           {_esc(guarantee)}</p>
         <table>
           <thead><tr><th>α</th><th>λ̂</th><th>Coverage (test)</th><th>Joint err</th><th>Sel. risk</th><th>≤ α this split?</th></tr></thead>

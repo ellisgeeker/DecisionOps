@@ -60,7 +60,7 @@ def run_certification(
     temp_ratio: float = 0.2,
     seed: int = 42,
     calibrate: bool = True,
-    loss_bound: float = 1.0,
+    loss_bound: float | None = None,
     contract: DecisionContract | None = None,
     confidence_level: float | None = None,
 ) -> CertificationReport:
@@ -77,7 +77,9 @@ def run_certification(
 
     With a `contract`, only errors on its automatic choices are risk: the
     certified quantity becomes the automated miss rate (auto-executed AND wrong,
-    over all traffic). Escalations are free of risk by construction.
+    over all traffic). Escalations are free of risk by construction. Contract
+    `severity` weights each miss by its true label and sets the CRC loss bound
+    B unless `loss_bound` is passed explicitly.
     """
     if alphas is None:
         alphas = [0.01, 0.05, 0.10]
@@ -86,6 +88,11 @@ def run_certification(
     if contract is not None:
         contract.validate_data(cases, predictions)
     auto = auto_set_of(contract)
+    severity_of = contract.miss_severity if contract is not None else None
+    if loss_bound is None:
+        loss_bound = contract.loss_bound() if contract is not None else 1.0
+    elif loss_bound <= 0.0:
+        raise ValueError(f"loss_bound must be > 0, got {loss_bound}")
 
     pairs = align_cases_and_predictions(cases, predictions)
     split = split_pairs(pairs, cal_ratio=cal_ratio, seed=seed)
@@ -127,13 +134,17 @@ def run_certification(
             alpha,
             loss_bound=loss_bound,
             auto_choices=auto,
+            severity_of=severity_of,
             confidence_level=confidence_level,
         )
         test_stats = None
         held = None
         if cert.feasible and cert.threshold is not None:
             test_stats = evaluate_certified_threshold(
-                test_pairs, cert.threshold, auto_choices=auto
+                test_pairs,
+                cert.threshold,
+                auto_choices=auto,
+                severity_of=severity_of,
             )
             held = bool(test_stats["joint_error_rate"] <= alpha)
         levels.append(
@@ -141,14 +152,22 @@ def run_certification(
         )
 
     if contract is not None:
-        notes.append(
-            f"Contract {contract.name!r}: only auto choices {sorted(contract.auto_set)} "
-            "count as risk; escalations never do. Certified quantity is the automated "
-            "miss rate."
-        )
+        if contract.severity:
+            notes.append(
+                f"Contract {contract.name!r}: only auto choices "
+                f"{sorted(contract.auto_set)} count as risk; miss severity "
+                f"{dict(sorted(contract.severity.items()))} (B={loss_bound:g}). "
+                "Certified quantity is the severity-weighted automated miss rate."
+            )
+        else:
+            notes.append(
+                f"Contract {contract.name!r}: only auto choices "
+                f"{sorted(contract.auto_set)} count as risk; escalations never do. "
+                "Certified quantity is the automated miss rate."
+            )
     notes.append(
-        "Certified quantity is the joint automated error rate, not conditional "
-        "selective risk. Assumes exchangeability."
+        "Certified quantity is the (possibly severity-weighted) joint automated "
+        "error, not conditional selective risk. Assumes exchangeability."
     )
     if confidence_level is None:
         notes += [

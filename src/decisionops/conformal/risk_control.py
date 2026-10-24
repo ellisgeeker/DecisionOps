@@ -11,11 +11,13 @@ both the calibration set and the new sample, assuming exchangeability.
 
 **Which risk this controls.** The per-example loss used here is
 
-    L_i(lambda) = 1 { confidence_i >= lambda  and  prediction_i != label_i }
+    L_i(lambda) = w(y_i) * 1 { confidence_i >= lambda  and  prediction_i != y_i }
 
-so the certified quantity is the **joint (marginal) automated error rate**: the
-fraction of *all* traffic that gets auto-accepted *and* is wrong. It is NOT the
-conditional selective risk (error rate *among* accepted samples) that
+where `w(y) = severity.get(y, 1)` comes from the decision contract (default 1).
+So the certified quantity is the **joint (marginal) weighted automated error**:
+the average loss over *all* traffic that is auto-accepted *and* wrong, with
+misses weighted by the true label's severity. It is NOT the conditional
+selective risk (error rate *among* accepted samples) that
 `decisionops.selective` reports empirically.
 
 The two differ by coverage:
@@ -42,13 +44,16 @@ Prediction Set (Bates et al., 2021) with a Clopper-Pearson upper bound:
 over the calibration draw. The scan runs from the strictest threshold down and
 stops at the first one whose upper bound exceeds alpha (fixed-sequence
 testing), so no multiplicity correction is needed. The bound is exact for 0-1
-loss only, so `loss_bound` must be 1. It is stricter than CRC: with zero
-errors, `n >= ln(delta) / ln(1 - alpha)` — 299 samples at alpha=1%, 95%.
+loss only, so every per-example loss mass must be 0 or 1 (`loss_bound` must be
+1, and contract severities may not introduce fractional weights). It is
+stricter than CRC: with zero errors, `n >= ln(delta) / ln(1 - alpha)` — 299
+samples at alpha=1%, 95%.
 """
 
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any, Literal
 
 import numpy as np
@@ -58,13 +63,14 @@ from scipy.stats import beta as beta_dist
 from decisionops.schemas import DecisionCase, DecisionPrediction
 
 GuaranteeKind = Literal["expectation", "high_probability"]
+SeverityOf = Callable[[str], float]
 
 
 class CRCResult(BaseModel):
     """Outcome of a CRC calibration run for one target risk level."""
 
     alpha: float
-    """Target bound on the joint automated error rate."""
+    """Target bound on the (weighted) joint automated error."""
 
     guarantee: GuaranteeKind = "expectation"
     """
@@ -99,7 +105,7 @@ class CRCResult(BaseModel):
 
     coverage_calibration: float | None = None
     empirical_selective_risk_calibration: float | None = None
-    """Error rate among accepted calibration samples. Empirical, not certified."""
+    """Mean loss among accepted calibration samples. Empirical, not certified."""
 
     n_accepted_calibration: int = 0
     notes: list[str] = Field(default_factory=list)
@@ -151,9 +157,16 @@ def clopper_pearson_upper(k: int, n: int, confidence_level: float) -> float:
     return float(beta_dist.ppf(confidence_level, k + 1, n - k))
 
 
+def _controlled_quantity(severity_of: SeverityOf | None) -> str:
+    if severity_of is None:
+        return "joint_automated_error_rate"
+    return "weighted_joint_automated_error"
+
+
 def _confidence_and_wrong(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     auto_choices: frozenset[str] | None = None,
+    severity_of: SeverityOf | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Confidence and per-case loss mass.
@@ -163,16 +176,41 @@ def _confidence_and_wrong(
     confidence = -inf keeps it out of every acceptance set and out of the
     candidate grid, while `n` still counts it — coverage and joint error stay
     fractions of *all* traffic.
+
+    A miss whose true label is `y` contributes `severity_of(y)` (default 1).
     """
     conf = np.array([pred.confidence for _, pred in pairs], dtype=np.float64)
-    wrong = np.array(
-        [0.0 if pred.prediction == case.label else 1.0 for case, pred in pairs],
-        dtype=np.float64,
-    )
+    if severity_of is None:
+        wrong = np.array(
+            [0.0 if pred.prediction == case.label else 1.0 for case, pred in pairs],
+            dtype=np.float64,
+        )
+    else:
+        wrong = np.array(
+            [
+                0.0 if pred.prediction == case.label else float(severity_of(case.label))
+                for case, pred in pairs
+            ],
+            dtype=np.float64,
+        )
     if auto_choices is not None:
         eligible = np.array([pred.prediction in auto_choices for _, pred in pairs], dtype=bool)
         conf = np.where(eligible, conf, -np.inf)
     return conf, wrong
+
+
+def _assert_zero_one_loss(wrong: np.ndarray, loss_bound: float) -> None:
+    """Clopper-Pearson needs Bernoulli events; fractional severity is out."""
+    if loss_bound != 1.0:
+        raise ValueError(
+            "confidence_level uses a binomial bound and requires 0-1 loss "
+            f"(loss_bound=1), got {loss_bound}"
+        )
+    if not np.all((wrong == 0.0) | (wrong == 1.0)):
+        raise ValueError(
+            "confidence_level requires 0-1 loss; contract severity introduces "
+            "weights other than 0 or 1"
+        )
 
 
 def _certify_high_probability(
@@ -181,6 +219,8 @@ def _certify_high_probability(
     alpha: float,
     confidence_level: float,
     auto_choices: frozenset[str] | None,
+    *,
+    controlled_quantity: str,
 ) -> CRCResult:
     """RCPS with a Clopper-Pearson bound; fixed-sequence scan from strict to loose."""
     n = int(conf.size)
@@ -189,6 +229,7 @@ def _certify_high_probability(
         "alpha": alpha,
         "guarantee": "high_probability",
         "confidence_level": confidence_level,
+        "controlled_quantity": controlled_quantity,
         "n_calibration": n,
         "min_n_required": min_n,
         "loss_bound": 1.0,
@@ -265,6 +306,7 @@ def certify_threshold(
     *,
     loss_bound: float = 1.0,
     auto_choices: frozenset[str] | None = None,
+    severity_of: SeverityOf | None = None,
     confidence_level: float | None = None,
 ) -> CRCResult:
     """
@@ -282,24 +324,30 @@ def certify_threshold(
     feasible one is returned, which maximises coverage subject to the bound.
 
     `auto_choices` (from a DecisionContract) restricts acceptance to the cheap
-    path. The loss 1{eligible and conf >= lambda and wrong} is still
-    non-increasing in lambda and bounded by 1, so the CRC guarantee is unchanged;
-    escalations simply never count as loss.
+    path. `severity_of(label)` weights a miss by its true label (default 1).
+    The loss stays non-increasing in lambda and bounded by `loss_bound`, so the
+    CRC guarantee is unchanged; escalations simply never count as loss.
     """
     if not pairs:
         raise ValueError("cannot certify on empty calibration set")
     if not 0.0 < alpha < 1.0:
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    if loss_bound <= 0.0:
+        raise ValueError(f"loss_bound must be > 0, got {loss_bound}")
 
-    conf, wrong = _confidence_and_wrong(pairs, auto_choices)
+    conf, wrong = _confidence_and_wrong(pairs, auto_choices, severity_of)
+    quantity = _controlled_quantity(severity_of)
     if confidence_level is not None:
         _check_confidence_level(confidence_level)
-        if loss_bound != 1.0:
-            raise ValueError(
-                "confidence_level uses a binomial bound and requires 0-1 loss "
-                f"(loss_bound=1), got {loss_bound}"
-            )
-        return _certify_high_probability(conf, wrong, alpha, confidence_level, auto_choices)
+        _assert_zero_one_loss(wrong, loss_bound)
+        return _certify_high_probability(
+            conf,
+            wrong,
+            alpha,
+            confidence_level,
+            auto_choices,
+            controlled_quantity=quantity,
+        )
 
     n = len(pairs)
     min_n = min_calibration_samples(alpha, loss_bound)
@@ -314,6 +362,7 @@ def certify_threshold(
         )
         return CRCResult(
             alpha=alpha,
+            controlled_quantity=quantity,
             threshold=None,
             feasible=False,
             n_calibration=n,
@@ -329,6 +378,7 @@ def certify_threshold(
         notes.append("No calibration case is on the automatic path; nothing to certify.")
         return CRCResult(
             alpha=alpha,
+            controlled_quantity=quantity,
             threshold=None,
             feasible=False,
             n_calibration=n,
@@ -358,6 +408,7 @@ def certify_threshold(
         )
         return CRCResult(
             alpha=alpha,
+            controlled_quantity=quantity,
             threshold=None,
             feasible=False,
             n_calibration=n,
@@ -377,13 +428,21 @@ def certify_threshold(
         notes.append(
             f"Certified threshold covers only {coverage:.1%} of calibration traffic."
         )
-    notes.append(
-        "Certified quantity is the joint automated error rate "
-        "(auto-accepted AND wrong, over all traffic), not conditional selective risk."
-    )
+    if severity_of is None:
+        notes.append(
+            "Certified quantity is the joint automated error rate "
+            "(auto-accepted AND wrong, over all traffic), not conditional selective risk."
+        )
+    else:
+        notes.append(
+            "Certified quantity is the severity-weighted joint automated error "
+            "(auto-accepted AND wrong, weighted by true-label severity), not "
+            "conditional selective risk."
+        )
 
     return CRCResult(
         alpha=alpha,
+        controlled_quantity=quantity,
         threshold=chosen,
         feasible=True,
         n_calibration=n,
@@ -407,16 +466,18 @@ def evaluate_certified_threshold(
     threshold: float,
     *,
     auto_choices: frozenset[str] | None = None,
+    severity_of: SeverityOf | None = None,
 ) -> dict[str, float | int]:
     """
     Measure a certified threshold on held-out data.
 
-    Reports the joint error rate (the certified quantity) alongside coverage and
-    empirical selective risk, so the guarantee can be checked against reality.
+    Reports the joint error (the certified quantity, severity-weighted when a
+    contract supplies weights) alongside coverage and empirical selective risk,
+    so the guarantee can be checked against reality.
     """
     if not pairs:
         raise ValueError("cannot evaluate on empty set")
-    conf, wrong = _confidence_and_wrong(pairs, auto_choices)
+    conf, wrong = _confidence_and_wrong(pairs, auto_choices, severity_of)
     n = len(pairs)
     accepted = conf >= threshold
     n_accepted = int(accepted.sum())

@@ -65,7 +65,7 @@ def test_certify_writes_report_and_prints_thresholds(tmp_path):
     assert result.exit_code == 0, result.output
     assert "Conformal Risk Control" in result.output
     # The certified quantity must be named, not silently conflated with selective risk.
-    assert "joint automated error rate" in result.output
+    assert "joint automated error" in result.output
     # "E[loss]" must survive rendering: rich eats bracketed text as markup unless escaped.
     assert "E[loss]" in result.output
 

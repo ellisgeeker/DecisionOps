@@ -123,8 +123,10 @@ def test_check_contract_catches_changed_model_input():
     p = _profile()
     p.check_contract(ROUTING)
     p.check_contract(None)
-    # Costs do not change the certificate.
+    # Costs do not change the certificate; severity does.
     p.check_contract(ROUTING.model_copy(update={"costs": {"skip": 0.0, "deep": 9.0}}))
+    with pytest.raises(ProfileMismatchError, match="recertify"):
+        p.check_contract(ROUTING.model_copy(update={"severity": {"deep": 3.0}}))
     reworded = ROUTING.model_copy(update={"descriptions": {"skip": "safe!", "deep": "risky"}})
     with pytest.raises(ProfileMismatchError, match="recertify"):
         p.check_contract(reworded)
