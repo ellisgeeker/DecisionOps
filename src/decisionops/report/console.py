@@ -199,6 +199,16 @@ def print_certification_report(
         )
     else:
         console.print("[dim]temperature: not applied[/dim]")
+
+    level_meta = (report.metadata or {}).get("confidence_level")
+    high_prob = level_meta is not None
+    if high_prob:
+        console.print(
+            f"guarantee: [bold]high-probability[/bold] — P(joint error <= alpha) "
+            f">= {float(level_meta):.0%} over the calibration draw (Clopper-Pearson)"
+        )
+    else:
+        console.print(r"guarantee: in expectation — E\[joint error] <= alpha (CRC)")
     console.print()
 
     cert = Table(
@@ -209,7 +219,7 @@ def print_certification_report(
     cert.add_column("Target alpha")
     cert.add_column("Certified", justify="center")
     cert.add_column("Threshold", justify="right")
-    cert.add_column("CRC bound", justify="right")
+    cert.add_column("Upper bound" if high_prob else "CRC bound", justify="right")
     cert.add_column("Coverage (cal)", justify="right")
     cert.add_column("n_cal / min_n", justify="right")
 
@@ -260,10 +270,16 @@ def print_certification_report(
                 "[green]yes[/green]" if ok else "[yellow]no[/yellow]",
             )
         console.print(held)
-        console.print(
-            "[dim]A single test split landing above alpha is expected roughly half "
-            r"the time — the guarantee is on E\[loss]. Judge by averaging over seeds.[/dim]"
-        )
+        if high_prob:
+            console.print(
+                "[dim]The bound is on true risk, not on this finite test split; "
+                "a split can still land above alpha by sampling noise.[/dim]"
+            )
+        else:
+            console.print(
+                "[dim]A single test split landing above alpha is expected roughly half "
+                r"the time — the guarantee is on E\[loss]. Judge by averaging over seeds.[/dim]"
+            )
 
     infeasible = [lv for lv in report.levels if not lv.certificate.feasible]
     if infeasible:

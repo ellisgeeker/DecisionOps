@@ -421,6 +421,16 @@ def _eval_html(result: EvalResult) -> str:
 
 
 def _cert_html(report: CertificationReport) -> str:
+    level_meta = (report.metadata or {}).get("confidence_level")
+    if level_meta is None:
+        guarantee = "Guarantee: E[joint error] ≤ α in expectation (CRC)."
+        split_hint = "A single split landing above α is expected roughly half the time."
+    else:
+        guarantee = (
+            f"Guarantee: P(joint error ≤ α) ≥ {float(level_meta):.0%} over the "
+            "calibration draw (Clopper-Pearson)."
+        )
+        split_hint = "The bound is on true risk; a finite test split can still land above α."
     rows = []
     for level in report.levels:
         c = level.certificate
@@ -449,12 +459,13 @@ def _cert_html(report: CertificationReport) -> str:
         <h1>DecisionOps certification (CRC)</h1>
         <p class="sub">n_crc_cal={report.split.n_calibration} n_test={report.split.n_test}
           seed={report.split.seed}. Certified quantity is the
-          <strong>joint automated error rate</strong>, not selective risk.</p>
+          <strong>joint automated error rate</strong>, not selective risk.
+          {_esc(guarantee)}</p>
         <table>
           <thead><tr><th>α</th><th>λ̂</th><th>Coverage (test)</th><th>Joint err</th><th>Sel. risk</th><th>≤ α this split?</th></tr></thead>
           <tbody>{"".join(rows)}</tbody>
         </table>
-        <p class="hint">A single split landing above α is expected roughly half the time.</p>
+        <p class="hint">{_esc(split_hint)}</p>
         <ul class="notes">{notes}</ul>
         """,
     )

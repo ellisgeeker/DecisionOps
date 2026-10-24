@@ -28,17 +28,36 @@ you need selective risk <= s and expect coverage around c, targeting a joint
 error budget of roughly s * c is the usual move — but c is itself random, so that
 conversion is a design heuristic, not a guarantee. This module reports the
 empirical selective risk at lambda_hat for context and labels it as empirical.
+
+**Expectation vs high probability.** CRC bounds E[loss]: averaged over draws of
+the calibration set, risk is <= alpha, but any one certificate can sit above
+it (roughly half do, since the smallest feasible lambda lands true risk just
+under alpha). Passing `confidence_level=1-delta` switches to a Risk-Controlling
+Prediction Set (Bates et al., 2021) with a Clopper-Pearson upper bound:
+
+    lambda_hat = inf { lambda : UCB_delta(Rhat_n(lambda)) <= alpha }
+
+    P( true joint error(lambda_hat) <= alpha ) >= 1 - delta
+
+over the calibration draw. The scan runs from the strictest threshold down and
+stops at the first one whose upper bound exceeds alpha (fixed-sequence
+testing), so no multiplicity correction is needed. The bound is exact for 0-1
+loss only, so `loss_bound` must be 1. It is stricter than CRC: with zero
+errors, `n >= ln(delta) / ln(1 - alpha)` — 299 samples at alpha=1%, 95%.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, Field
+from scipy.stats import beta as beta_dist
 
 from decisionops.schemas import DecisionCase, DecisionPrediction
+
+GuaranteeKind = Literal["expectation", "high_probability"]
 
 
 class CRCResult(BaseModel):
@@ -46,6 +65,16 @@ class CRCResult(BaseModel):
 
     alpha: float
     """Target bound on the joint automated error rate."""
+
+    guarantee: GuaranteeKind = "expectation"
+    """
+    `expectation`: CRC, E[joint error] <= alpha over draws of cal + new sample.
+    `high_probability`: RCPS / Clopper-Pearson, P(true joint error <= alpha)
+    >= confidence_level over the draw of the calibration set.
+    """
+
+    confidence_level: float | None = None
+    """1 - delta for `high_probability`; None for plain CRC."""
 
     controlled_quantity: str = "joint_automated_error_rate"
     threshold: float | None = None
@@ -61,7 +90,12 @@ class CRCResult(BaseModel):
     """Rhat_n(lambda_hat) on the calibration set (not a guarantee)."""
 
     crc_bound_value: float | None = None
-    """(n/(n+1))*Rhat + B/(n+1) at lambda_hat; must be <= alpha."""
+    """
+    Bound actually checked against alpha at lambda_hat.
+
+    CRC: (n/(n+1))*Rhat + B/(n+1). High-probability: the one-sided
+    Clopper-Pearson upper limit on the true joint error at confidence_level.
+    """
 
     coverage_calibration: float | None = None
     empirical_selective_risk_calibration: float | None = None
@@ -84,6 +118,37 @@ def min_calibration_samples(alpha: float, loss_bound: float = 1.0) -> int:
     if loss_bound <= 0.0:
         raise ValueError(f"loss_bound must be > 0, got {loss_bound}")
     return max(1, math.ceil(loss_bound / alpha - 1.0))
+
+
+def _check_confidence_level(confidence_level: float) -> None:
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError(f"confidence_level must be in (0, 1), got {confidence_level}")
+
+
+def min_calibration_samples_hp(alpha: float, confidence_level: float) -> int:
+    """
+    Smallest n for which the high-probability bound can hold with zero errors.
+
+    With k=0 the Clopper-Pearson upper limit is 1 - delta^(1/n), so it drops to
+    alpha once (1 - alpha)^n <= delta, i.e. n >= ln(delta) / ln(1 - alpha).
+    """
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    _check_confidence_level(confidence_level)
+    delta = 1.0 - confidence_level
+    return max(1, math.ceil(math.log(delta) / math.log1p(-alpha)))
+
+
+def clopper_pearson_upper(k: int, n: int, confidence_level: float) -> float:
+    """One-sided upper confidence limit on a binomial rate: k events in n trials."""
+    if n <= 0:
+        raise ValueError(f"n must be > 0, got {n}")
+    if not 0 <= k <= n:
+        raise ValueError(f"k must be in [0, n], got k={k}, n={n}")
+    _check_confidence_level(confidence_level)
+    if k >= n:
+        return 1.0
+    return float(beta_dist.ppf(confidence_level, k + 1, n - k))
 
 
 def _confidence_and_wrong(
@@ -110,15 +175,105 @@ def _confidence_and_wrong(
     return conf, wrong
 
 
+def _certify_high_probability(
+    conf: np.ndarray,
+    wrong: np.ndarray,
+    alpha: float,
+    confidence_level: float,
+    auto_choices: frozenset[str] | None,
+) -> CRCResult:
+    """RCPS with a Clopper-Pearson bound; fixed-sequence scan from strict to loose."""
+    n = int(conf.size)
+    min_n = min_calibration_samples_hp(alpha, confidence_level)
+    base = {
+        "alpha": alpha,
+        "guarantee": "high_probability",
+        "confidence_level": confidence_level,
+        "n_calibration": n,
+        "min_n_required": min_n,
+        "loss_bound": 1.0,
+    }
+    notes: list[str] = []
+
+    # With zero errors the bound is at its lowest; if that fails nothing can pass.
+    if clopper_pearson_upper(0, n, confidence_level) > alpha:
+        notes.append(
+            f"Infeasible: even with zero errors the {confidence_level:.0%} upper bound on "
+            f"n={n} samples exceeds alpha={alpha:.4f}. Need at least {min_n} "
+            "calibration samples."
+        )
+        return CRCResult(threshold=None, feasible=False, notes=notes, **base)
+
+    grid = np.unique(conf[np.isfinite(conf)])
+    if grid.size == 0:
+        notes.append("No calibration case is on the automatic path; nothing to certify.")
+        return CRCResult(threshold=None, feasible=False, notes=notes, **base)
+
+    chosen: float | None = None
+    chosen_k = 0
+    chosen_ucb = 0.0
+    # Strictest first. Each test is at level delta; stopping at the first failure
+    # keeps the family-wise error at delta because the loss is monotone.
+    for lam in grid[::-1]:
+        k = int(np.sum(wrong[conf >= lam]))
+        ucb = clopper_pearson_upper(k, n, confidence_level)
+        if ucb > alpha:
+            break
+        chosen, chosen_k, chosen_ucb = float(lam), k, ucb
+
+    if chosen is None:
+        notes.append(
+            "Even the strictest observed threshold has an upper error bound above "
+            "alpha; abstain on all traffic at this level."
+        )
+        return CRCResult(threshold=None, feasible=False, notes=notes, **base)
+
+    accepted = conf >= chosen
+    n_accepted = int(accepted.sum())
+    coverage = n_accepted / n
+    if coverage < 0.05:
+        notes.append(
+            f"Certified threshold covers only {coverage:.1%} of calibration traffic."
+        )
+    notes.append(
+        f"High-probability certificate: with probability >= {confidence_level:.0%} over "
+        "the calibration draw, the true joint automated error rate is <= alpha."
+    )
+    return CRCResult(
+        threshold=chosen,
+        feasible=True,
+        empirical_joint_error=chosen_k / n,
+        crc_bound_value=chosen_ucb,
+        coverage_calibration=coverage,
+        empirical_selective_risk_calibration=(
+            float(wrong[accepted].mean()) if n_accepted else None
+        ),
+        n_accepted_calibration=n_accepted,
+        notes=notes,
+        metadata={
+            "n_grid_candidates": int(grid.size),
+            "auto_choices": sorted(auto_choices) if auto_choices is not None else None,
+            "bound": "clopper_pearson",
+        },
+        **base,
+    )
+
+
 def certify_threshold(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     alpha: float,
     *,
     loss_bound: float = 1.0,
     auto_choices: frozenset[str] | None = None,
+    confidence_level: float | None = None,
 ) -> CRCResult:
     """
     Choose the smallest threshold whose CRC bound holds at level `alpha`.
+
+    `confidence_level=None` (default) is Conformal Risk Control: the joint error
+    is bounded by alpha **in expectation**. A value in (0, 1), e.g. 0.95, gives a
+    high-probability certificate instead: P(true joint error <= alpha) >=
+    confidence_level over the calibration draw. That needs 0-1 loss.
 
     `pairs` must be the **calibration** split only. Using the same data to pick
     lambda_hat and to report performance voids the guarantee.
@@ -137,6 +292,15 @@ def certify_threshold(
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
 
     conf, wrong = _confidence_and_wrong(pairs, auto_choices)
+    if confidence_level is not None:
+        _check_confidence_level(confidence_level)
+        if loss_bound != 1.0:
+            raise ValueError(
+                "confidence_level uses a binomial bound and requires 0-1 loss "
+                f"(loss_bound=1), got {loss_bound}"
+            )
+        return _certify_high_probability(conf, wrong, alpha, confidence_level, auto_choices)
+
     n = len(pairs)
     min_n = min_calibration_samples(alpha, loss_bound)
     notes: list[str] = []

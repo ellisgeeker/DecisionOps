@@ -547,6 +547,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "rich" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "typer" },
 ]
 
@@ -581,6 +582,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "safetensors", marker = "extra == 'laya'", specifier = ">=0.4" },
     { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "scipy", specifier = ">=1.13" },
     { name = "torch", marker = "extra == 'laya'", specifier = ">=2.4" },
     { name = "transformers", marker = "extra == 'laya'", specifier = ">=4.48" },
     { name = "typer", specifier = ">=0.12" },

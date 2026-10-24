@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from decisionops.__version__ import __version__
 from decisionops.calibration.temperature import apply_temperature
 from decisionops.conformal.certify import CertificationReport
+from decisionops.conformal.risk_control import GuaranteeKind
 from decisionops.contract import DecisionContract
 from decisionops.schemas import DecisionPrediction
 
@@ -50,6 +51,10 @@ class CertificationProfile(BaseModel):
 
     schema_version: int = PROFILE_SCHEMA_VERSION
     alpha: float
+    guarantee: GuaranteeKind = "expectation"
+    """`expectation` (CRC) or `high_probability` (at `confidence_level`)."""
+
+    confidence_level: float | None = None
     controlled_quantity: str = "joint_automated_error_rate"
     threshold: float
     """lambda_hat, on calibrated confidence when `temperature` is set."""
@@ -138,6 +143,8 @@ def profile_from_report(report: CertificationReport, alpha: float) -> Certificat
     contract = meta.get("contract")
     return CertificationProfile(
         alpha=cert.alpha,
+        guarantee=cert.guarantee,
+        confidence_level=cert.confidence_level,
         controlled_quantity=cert.controlled_quantity,
         threshold=cert.threshold,
         temperature=report.temperature,

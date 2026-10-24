@@ -627,6 +627,14 @@ def certify_cmd(
             "Defaults to the only alpha when exactly one is given.",
         ),
     ] = None,
+    confidence_level: Annotated[
+        float | None,
+        typer.Option(
+            "--confidence-level",
+            help="e.g. 0.95: high-probability certificate (P(joint error <= alpha) "
+            ">= this) instead of CRC's in-expectation bound. Needs more data.",
+        ),
+    ] = None,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -636,6 +644,9 @@ def certify_cmd(
     is bounded by alpha in expectation, under exchangeability. This is not the
     conditional selective risk that `gate` reports empirically.
 
+    With --confidence-level the bound instead holds with that probability over
+    the calibration draw (Clopper-Pearson RCPS).
+
     Levels with too little calibration data, or where no threshold can hold
     alpha, are reported as infeasible rather than given a threshold.
     """
@@ -643,6 +654,8 @@ def certify_cmd(
         raise typer.BadParameter("--cal-ratio must be in (0, 1)")
     if not 0.0 <= temp_ratio < 1.0:
         raise typer.BadParameter("--temp-ratio must be in [0, 1)")
+    if confidence_level is not None and not 0.0 < confidence_level < 1.0:
+        raise typer.BadParameter("--confidence-level must be in (0, 1)")
 
     levels = _parse_risks(alphas)
     if profile_alpha is not None and profile is None:
@@ -677,6 +690,7 @@ def certify_cmd(
             seed=seed,
             calibrate=calibrate,
             contract=decision_contract,
+            confidence_level=confidence_level,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -854,6 +868,14 @@ def decide_cmd(
         f"profile={frozen.profile_hash}  alpha={frozen.alpha:g}  "
         f"threshold={frozen.threshold:.4f}  "
         + (f"T={frozen.temperature:.4f}" if frozen.temperature is not None else "T=none")
+    )
+    console.print(
+        f"guarantee={frozen.guarantee}"
+        + (
+            f" (confidence_level={frozen.confidence_level:g})"
+            if frozen.confidence_level is not None
+            else ""
+        )
     )
     if frozen.model or frozen.provider:
         console.print(

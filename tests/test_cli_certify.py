@@ -161,6 +161,58 @@ def test_certify_rejects_contract_that_does_not_fit_data(tmp_path):
     assert "does not fit contract" in result.output
 
 
+def test_certify_confidence_level_gives_high_probability_certificate(tmp_path):
+    dataset, predictions = _write_pool(tmp_path, 800)
+    out = tmp_path / "out"
+    profile = tmp_path / "profile.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "certify", str(dataset), "-p", str(predictions),
+            "--alphas", "0.10", "--no-calibrate", "--confidence-level", "0.95",
+            "-o", str(out), "--profile", str(profile),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "high-probability" in result.output
+    assert "Upper bound" in result.output
+    payload = json.loads((out / "certification_report.json").read_text(encoding="utf-8"))
+    assert payload["metadata"]["guarantee"] == "high_probability"
+    assert payload["metadata"]["confidence_level"] == 0.95
+    cert = payload["levels"][0]["certificate"]
+    assert cert["feasible"] and cert["guarantee"] == "high_probability"
+    frozen = json.loads(profile.read_text(encoding="utf-8"))
+    assert frozen["guarantee"] == "high_probability"
+    assert frozen["confidence_level"] == 0.95
+
+
+def test_certify_default_guarantee_is_expectation(tmp_path):
+    dataset, predictions = _write_pool(tmp_path, 400)
+    out = tmp_path / "out"
+    result = runner.invoke(
+        app,
+        ["certify", str(dataset), "-p", str(predictions), "--alphas", "0.10",
+         "--no-calibrate", "-o", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "in expectation" in result.output
+    payload = json.loads((out / "certification_report.json").read_text(encoding="utf-8"))
+    assert payload["metadata"]["guarantee"] == "expectation"
+    assert payload["metadata"]["confidence_level"] is None
+
+
+def test_certify_rejects_out_of_range_confidence_level(tmp_path):
+    dataset, predictions = _write_pool(tmp_path, 120)
+    for value in ("0", "1", "1.5"):
+        result = runner.invoke(
+            app,
+            ["certify", str(dataset), "-p", str(predictions), "--confidence-level", value],
+        )
+        assert result.exit_code != 0, value
+
+
 def test_certify_rejects_out_of_range_ratios(tmp_path):
     dataset, predictions = _write_pool(tmp_path, 120)
     for flag, value in [("--cal-ratio", "1.0"), ("--temp-ratio", "1.0"), ("--alphas", "1.5")]:

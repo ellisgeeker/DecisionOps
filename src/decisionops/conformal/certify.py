@@ -62,9 +62,13 @@ def run_certification(
     calibrate: bool = True,
     loss_bound: float = 1.0,
     contract: DecisionContract | None = None,
+    confidence_level: float | None = None,
 ) -> CertificationReport:
     """
     Three-way split: fit temperature, derive CRC thresholds, verify — on disjoint data.
+
+    `confidence_level` (e.g. 0.95) switches every level from an in-expectation
+    CRC certificate to a high-probability one; see `certify_threshold`.
 
     Temperature must NOT be fit on the CRC calibration set. Doing so makes those
     probabilities optimistically biased, breaks exchangeability with test, and the
@@ -118,7 +122,13 @@ def run_certification(
 
     levels: list[CertifiedLevel] = []
     for alpha in alphas:
-        cert = certify_threshold(cal_pairs, alpha, loss_bound=loss_bound, auto_choices=auto)
+        cert = certify_threshold(
+            cal_pairs,
+            alpha,
+            loss_bound=loss_bound,
+            auto_choices=auto,
+            confidence_level=confidence_level,
+        )
         test_stats = None
         held = None
         if cert.feasible and cert.threshold is not None:
@@ -136,13 +146,23 @@ def run_certification(
             "count as risk; escalations never do. Certified quantity is the automated "
             "miss rate."
         )
-    notes += [
-        "CRC certifies the joint automated error rate, not conditional selective risk.",
-        "Guarantee is marginal over calibration and test draws, and assumes exchangeability.",
-        "A single test split exceeding alpha is expected roughly half the time: "
-        "the guarantee is on E[loss], and the smallest feasible lambda puts true "
-        "risk just under alpha. Validate by averaging over seeds.",
-    ]
+    notes.append(
+        "Certified quantity is the joint automated error rate, not conditional "
+        "selective risk. Assumes exchangeability."
+    )
+    if confidence_level is None:
+        notes += [
+            "CRC guarantee is on E[loss], marginal over calibration and test draws.",
+            "A single test split exceeding alpha is expected roughly half the time: "
+            "the smallest feasible lambda puts true risk just under alpha. Validate "
+            "by averaging over seeds.",
+        ]
+    else:
+        notes.append(
+            f"High-probability guarantee: with probability >= {confidence_level:.0%} over "
+            "the calibration draw, true joint error <= alpha. A test split can still "
+            "land above alpha by sampling noise."
+        )
     infeasible = [
         f"{level.certificate.alpha:.0%}" for level in levels if not level.certificate.feasible
     ]
@@ -169,6 +189,8 @@ def run_certification(
         notes=notes,
         metadata={
             "alphas": list(alphas),
+            "guarantee": "expectation" if confidence_level is None else "high_probability",
+            "confidence_level": confidence_level,
             "loss_bound": loss_bound,
             "temp_ratio": temp_ratio,
             "protocol": "three_way_split_temp_crc_test",
