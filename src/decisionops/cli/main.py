@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -713,6 +714,18 @@ def certify_cmd(
             ">= this) instead of CRC's in-expectation bound. Needs more data.",
         ),
     ] = None,
+    audit_rate: Annotated[
+        float,
+        typer.Option(
+            "--audit-rate",
+            help="Profile: share of traffic decide() forces to the expensive path "
+            "as an unbiased audit sample for recertification (e.g. 0.05).",
+        ),
+    ] = 0.0,
+    audit_seed: Annotated[
+        int,
+        typer.Option("--audit-seed", help="Profile: salt for the audit draw."),
+    ] = 0,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -734,6 +747,10 @@ def certify_cmd(
         raise typer.BadParameter("--temp-ratio must be in [0, 1)")
     if confidence_level is not None and not 0.0 < confidence_level < 1.0:
         raise typer.BadParameter("--confidence-level must be in (0, 1)")
+    if not 0.0 <= audit_rate < 1.0:
+        raise typer.BadParameter("--audit-rate must be in [0, 1)")
+    if profile is None and (audit_rate != 0.0 or audit_seed != 0):
+        raise typer.BadParameter("--audit-rate / --audit-seed need --profile")
 
     levels = _parse_risks(alphas)
     if profile_alpha is not None and profile is None:
@@ -781,7 +798,9 @@ def certify_cmd(
 
     if profile is not None and profile_alpha is not None:
         try:
-            frozen = profile_from_report(report, profile_alpha)
+            frozen = profile_from_report(
+                report, profile_alpha, audit_rate=audit_rate, audit_seed=audit_seed
+            )
         except ValueError as exc:
             console.print(f"[red]No profile written:[/red] {escape(str(exc))}")
             raise typer.Exit(code=1) from exc
@@ -789,7 +808,7 @@ def certify_cmd(
         console.print(
             f"[green]Wrote[/green] {path}  "
             f"(alpha={frozen.alpha:g}, threshold={frozen.threshold:.4f}, "
-            f"profile={frozen.profile_hash})"
+            f"audit_rate={frozen.audit_rate:g}, profile={frozen.profile_hash})"
         )
 
 
@@ -942,6 +961,9 @@ def decide_cmd(
 
     n = len(decisions)
     n_auto = sum(d.action == "auto" for d in decisions)
+    n_audit = sum(d.audit for d in decisions)
+    id_counts = Counter(d.id for d in decisions)
+    duplicated = sorted(i for i, c in id_counts.items() if c > 1)
     by_reason: dict[str, int] = {}
     for d in decisions:
         by_reason[d.reason] = by_reason.get(d.reason, 0) + 1
@@ -970,6 +992,21 @@ def decide_cmd(
         f"n={n}  auto={n_auto} ({n_auto / n:.1%})  escalate={n - n_auto}  "
         + "  ".join(f"{k}={v}" for k, v in sorted(by_reason.items()))
     )
+    if frozen.audit_rate > 0.0:
+        console.print(
+            f"audit sample: {n_audit} ({n_audit / n:.1%}) at audit_rate="
+            f"{frozen.audit_rate:g}, seed={frozen.audit_seed}; recertify on audit=true rows"
+        )
+    if duplicated:
+        # The audit draw keys on id, so repeated ids share one draw: fine for
+        # retries of the same case, wrong if distinct cases reuse an id.
+        shown = ", ".join(repr(i) for i in duplicated[:5])
+        more = f" (+{len(duplicated) - 5} more)" if len(duplicated) > 5 else ""
+        console.print(
+            f"[yellow]Warning:[/yellow] {len(duplicated)} id(s) appear more than once: "
+            f"{escape(shown)}{more}. Repeated ids get the same audit draw; if they are "
+            "distinct cases, give each a unique id or the audit sample is not uniform."
+        )
 
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)

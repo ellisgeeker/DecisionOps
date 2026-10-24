@@ -18,6 +18,17 @@ rather than silently routing under a certificate that no longer applies.
 Failure is one-sided on purpose. Anything the rule cannot vouch for (an
 escalation choice, a choice outside the contract, low confidence) escalates;
 escalating costs money, never safety.
+
+**Audit sample.** Once the cheap path is live, auto-accepted cases never get
+the expensive verdict, so organic labels come only from low-confidence
+escalations — a biased sample that cannot recertify. With `audit_rate = eps`
+each case is drawn into an audit sample with probability eps, from a hash of
+`(audit_seed, id)`: independent of the model's score, reproducible, and
+stateless across processes. Every drawn case is marked `audit=True`, including
+those that would escalate anyway, so the audit set is a uniform sample of
+traffic and a valid calibration set as-is. A drawn case the rule would AUTO is
+escalated with `reason="audit"`. Forcing escalations only removes automated
+errors, so the certified bound still holds; the cost is ~eps of the savings.
 """
 
 from __future__ import annotations
@@ -39,7 +50,17 @@ from decisionops.schemas import DecisionPrediction
 PROFILE_SCHEMA_VERSION = 1
 
 Action = Literal["auto", "escalate"]
-Reason = Literal["certified", "below_threshold", "escalate_choice", "outside_contract"]
+Reason = Literal[
+    "certified", "below_threshold", "escalate_choice", "outside_contract", "audit"
+]
+
+_AUDIT_SCALE = float(2**64)
+
+
+def audit_draw(audit_seed: int, case_id: str) -> float:
+    """Uniform [0, 1) draw for one case, from `(audit_seed, id)` only."""
+    digest = hashlib.sha256(f"{audit_seed}:{case_id}".encode()).digest()
+    return int.from_bytes(digest[:8], "big") / _AUDIT_SCALE
 
 
 class ProfileMismatchError(ValueError):
@@ -72,6 +93,12 @@ class CertificationProfile(BaseModel):
 
     contract_hash: str | None = None
     contract: dict[str, Any] | None = None
+
+    audit_rate: float = Field(default=0.0, ge=0.0, lt=1.0)
+    """Share of traffic drawn into the random audit sample (forced to the expensive path)."""
+
+    audit_seed: int = 0
+    """Salt for the audit draw; with the case id it fully determines membership."""
 
     # Evidence behind the certificate; informational at runtime.
     n_calibration: int
@@ -117,11 +144,23 @@ class Decision(BaseModel):
     threshold: float
     alpha: float
     reason: Reason
+    audit: bool = False
+    """
+    Drawn into the random audit sample. True also for cases that escalated for
+    their own reason; recertify on exactly the `audit=True` cases.
+    """
+
     profile: str
     """`CertificationProfile.profile_hash`."""
 
 
-def profile_from_report(report: CertificationReport, alpha: float) -> CertificationProfile:
+def profile_from_report(
+    report: CertificationReport,
+    alpha: float,
+    *,
+    audit_rate: float = 0.0,
+    audit_seed: int = 0,
+) -> CertificationProfile:
     """Freeze the certificate at `alpha` from a certification report."""
     level = next(
         (lv for lv in report.levels if abs(lv.certificate.alpha - alpha) < 1e-12), None
@@ -154,6 +193,8 @@ def profile_from_report(report: CertificationReport, alpha: float) -> Certificat
         auto_choices=list(contract["auto_choices"]) if contract else None,
         contract_hash=meta.get("contract_hash"),
         contract=contract,
+        audit_rate=audit_rate,
+        audit_seed=audit_seed,
         n_calibration=cert.n_calibration,
         n_temperature_fit=report.n_temperature_fit,
         crc_bound_value=cert.crc_bound_value,
@@ -204,6 +245,13 @@ def decide(
     else:
         reason = "below_threshold"
 
+    audit = (
+        profile.audit_rate > 0.0
+        and audit_draw(profile.audit_seed, prediction.id) < profile.audit_rate
+    )
+    if audit and reason == "certified":
+        reason = "audit"
+
     return Decision(
         id=prediction.id,
         action="auto" if reason == "certified" else "escalate",
@@ -212,6 +260,7 @@ def decide(
         threshold=profile.threshold,
         alpha=profile.alpha,
         reason=reason,
+        audit=audit,
         profile=tag,
     )
 

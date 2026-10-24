@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-23 (09-27 work reviewed and committed; next is audit sampling in `decide()`, then v0.1.0)
+**Last updated:** 2026-10-23 (audit sampling in `decide()` done; next is the v0.1.0 release)
 **Version:** 0.1.0a1 (unreleased)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,10 +16,29 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: roadmap #11.1 — audit sampling in `decide()`**, then the v0.1.0
-release (#11.2). The label strategy it serves is under *Label strategy*
-below; the rest of that loop (feedback format, `recertify`, drift monitor)
-is 0.1.x.
+**Next: roadmap #11.2 — v0.1.0 release.** The rest of the label loop
+(feedback format, `recertify`, drift monitor) is 0.1.x; see *Label strategy*.
+
+Done 2026-10-23 — roadmap #11.1, audit sampling in `decide()`:
+
+- `CertificationProfile.audit_rate` (ε, default 0 = off) and `audit_seed`;
+  `certify --profile … --audit-rate 0.05 [--audit-seed N]` writes them. Both
+  are part of `profile_hash`.
+- Membership is `sha256(f"{seed}:{id}") < ε`: independent of the score,
+  reproducible, no state across processes. Every drawn case gets
+  `Decision.audit=True`, *including* ones that escalate anyway, so the
+  `audit=True` rows are a uniform sample of traffic — recertify on exactly
+  those. A drawn case the rule would AUTO becomes ESCALATE,
+  `reason="audit"`. Forced escalations only remove automated errors, so the
+  bound still holds.
+- Tests (`tests/test_decide.py::test_audit_*`): rate and reproducibility,
+  KS test that audit confidence matches all traffic while organic
+  escalations do not, audit only removes auto errors, CLI round trip.
+- Toy pack @10%, ε=5%, seed 1: 50/120 AUTO (was 52), 3 in the audit sample.
+- Caveat: the draw keys on `id`, so ids must be unique per case. A caller
+  that reuses ids (retries, replays) gets the same audit decision each time,
+  which is intended for retries but means duplicate ids are not resampled.
+  `decisionops decide` warns when the input has repeated ids.
 
 Done 2026-10-23 — pre-commit review of the 09-27 work, two fixes:
 
@@ -180,11 +199,10 @@ is dropped from the roadmap.
 10. **Thin gate** — *same bundle as #7, after v0.1.* GitHub Action (PR
     routing — this *is* the code-review integration) then
     `POST /v1/decision`. V1 is the CLI; the original plan deferred Gateway.
-11. **Wrap-up** — **next.** ~~CRC `confidence_level` API~~ done
+11. **Wrap-up** — in progress. ~~CRC `confidence_level` API~~ done
     2026-09-27. Remaining, in order:
-    1. **Audit sampling in `decide()`** — before v0.1, see *Label strategy*
-       below. Small, and it decides whether any later feedback data is usable.
-    2. **v0.1.0 release** — commit, remote repo, top-level public API
+    1. ~~**Audit sampling in `decide()`**~~ — done 2026-10-23.
+    2. **v0.1.0 release** — **next** — commit, remote repo, top-level public API
        (`decide`, `run_certification`, `load_profile`, …), delete dead
        `report/json_report.py`, bump `0.1.0a1` → `0.1.0`, changelog, tag.
     3. **0.1.x: closing the label loop** — outcome feedback format,
@@ -246,7 +264,7 @@ Work items:
 
 | Item | What | When |
 |---|---|---|
-| Audit sampling in `decide()` | ε-random forced ESCALATE, `reason="audit"`, seeded / recorded so it is reproducible, ε stored in the profile | before v0.1 |
+| ~~Audit sampling in `decide()`~~ | done 2026-10-23: `audit_rate` / `audit_seed` in the profile, `Decision.audit` | before v0.1 |
 | Outcome feedback format | decision id, label, label source, matured-at | 0.1.x |
 | `decisionops recertify` | certify on audit samples only; diff against the current profile | 0.1.x |
 | Drift monitor | automation rate + confidence-distribution shift, no labels | 0.1.x |
@@ -339,7 +357,7 @@ in tree.
 
 ### Validation performed
 
-- **141 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **151 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).

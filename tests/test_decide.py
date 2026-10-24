@@ -15,6 +15,7 @@ from decisionops.contract import DecisionContract
 from decisionops.decide import (
     CertificationProfile,
     ProfileMismatchError,
+    audit_draw,
     decide,
     decide_many,
     load_profile,
@@ -257,3 +258,130 @@ def test_cli_certify_profile_argument_checks(tmp_path):
     )
     assert result.exit_code == 1
     assert not (tmp_path / "p.json").exists()
+
+
+def test_audit_off_by_default_changes_nothing():
+    cases, preds = _pool(n=400)
+    plain = decide_many(preds, _profile())
+    assert not any(d.audit for d in plain)
+    assert all(d.reason != "audit" for d in plain)
+
+
+def test_audit_draw_rate_is_reproducible_and_seeded():
+    ids = [f"case-{i}" for i in range(20_000)]
+    a = [audit_draw(7, i) < 0.05 for i in ids]
+    assert sum(a) / len(ids) == pytest.approx(0.05, abs=0.006)
+    assert a == [audit_draw(7, i) < 0.05 for i in ids]  # stateless, reproducible
+    b = [audit_draw(8, i) < 0.05 for i in ids]
+    assert a != b  # the seed moves the sample
+
+
+def test_audit_forces_escalation_and_marks_escalations_too():
+    p = _profile(audit_rate=0.5, audit_seed=3)
+    drawn = [i for i in map(str, range(200)) if audit_draw(3, i) < 0.5]
+    not_drawn = [i for i in map(str, range(200)) if audit_draw(3, i) >= 0.5]
+
+    d = decide(_pred("skip", 0.99, pid=drawn[0]), p)
+    assert (d.action, d.reason, d.audit) == ("escalate", "audit", True)
+    # Already escalating: keeps its own reason, still in the audit sample.
+    d = decide(_pred("skip", 0.5, pid=drawn[0]), p)
+    assert (d.action, d.reason, d.audit) == ("escalate", "below_threshold", True)
+    d = decide(_pred("deep", 0.99, pid=drawn[0]), p)
+    assert (d.reason, d.audit) == ("escalate_choice", True)
+
+    d = decide(_pred("skip", 0.99, pid=not_drawn[0]), p)
+    assert (d.action, d.reason, d.audit) == ("auto", "certified", False)
+
+
+def test_audit_sample_is_independent_of_confidence():
+    """The audit set must look like all traffic, unlike organic escalations."""
+    from scipy.stats import ks_2samp
+
+    _, preds = _pool(n=6000, seed=11)
+    p = _profile(audit_rate=0.1, audit_seed=1)
+    decisions = decide_many(preds, p)
+    conf_all = np.array([d.confidence for d in decisions])
+    conf_audit = np.array([d.confidence for d in decisions if d.audit])
+    conf_organic = np.array(
+        [d.confidence for d in decisions if d.action == "escalate" and not d.audit]
+    )
+    assert 450 < conf_audit.size < 750
+    assert ks_2samp(conf_audit, conf_all).pvalue > 0.01
+    # Contrast: organic escalations are visibly selected by confidence.
+    assert ks_2samp(conf_organic, conf_all).pvalue < 1e-6
+
+
+def test_audit_only_removes_automated_errors():
+    cases, preds = _pool(n=2000, seed=5)
+    labels = {c.id: c.label for c in cases}
+    base = decide_many(preds, _profile())
+    audited = decide_many(preds, _profile(audit_rate=0.2, audit_seed=9))
+
+    def auto_errors(ds):
+        return {d.id for d in ds if d.action == "auto" and d.choice != labels[d.id]}
+
+    assert auto_errors(audited) <= auto_errors(base)
+    n_base = sum(d.action == "auto" for d in base)
+    n_aud = sum(d.action == "auto" for d in audited)
+    assert n_aud == pytest.approx(0.8 * n_base, rel=0.1)
+
+
+def test_audit_rate_round_trips_and_is_validated(tmp_path):
+    p = _profile(audit_rate=0.05, audit_seed=42)
+    path = save_profile(p, tmp_path / "p.json")
+    loaded = load_profile(path)
+    assert (loaded.audit_rate, loaded.audit_seed) == (0.05, 42)
+    assert loaded.profile_hash == p.profile_hash
+    assert _profile().profile_hash != p.profile_hash  # audit settings are part of the id
+    for bad in (-0.1, 1.0):
+        with pytest.raises(ValueError):
+            _profile(audit_rate=bad)
+
+
+def test_cli_certify_audit_rate_then_decide(tmp_path):
+    cases, preds = _pool()
+    dataset = tmp_path / "dataset.jsonl"
+    predictions = tmp_path / "predictions.jsonl"
+    contract = tmp_path / "contract.json"
+    _write_jsonl(dataset, [c.model_dump(mode="json") for c in cases])
+    _write_jsonl(predictions, [p.model_dump(mode="json") for p in preds])
+    contract.write_text(ROUTING.model_dump_json(), encoding="utf-8")
+    profile = tmp_path / "profile.json"
+    base = ["certify", str(dataset), "-p", str(predictions), "--contract", str(contract),
+            "--alphas", "0.10"]
+
+    result = runner.invoke(app, [*base, "--audit-rate", "0.05"])
+    assert result.exit_code != 0  # needs --profile
+    result = runner.invoke(app, [*base, "--profile", str(profile), "--audit-rate", "1.0"])
+    assert result.exit_code != 0
+
+    result = runner.invoke(
+        app, [*base, "--profile", str(profile), "--audit-rate", "0.1", "--audit-seed", "4"]
+    )
+    assert result.exit_code == 0, result.output
+    assert (load_profile(profile).audit_rate, load_profile(profile).audit_seed) == (0.1, 4)
+
+    out = tmp_path / "decisions.jsonl"
+    result = runner.invoke(app, ["decide", str(profile), "-p", str(predictions), "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert "audit sample:" in result.output
+    rows = [json.loads(line) for line in out.read_text().splitlines()]
+    n_audit = sum(r["audit"] for r in rows)
+    assert 0 < n_audit < len(rows)
+    assert all(r["action"] == "escalate" for r in rows if r["audit"])
+
+
+def test_cli_decide_warns_on_duplicate_ids(tmp_path):
+    profile = save_profile(_profile(audit_rate=0.1), tmp_path / "p.json")
+    preds = [_pred("skip", 0.95, pid=i) for i in ("a", "b", "a", "c", "c", "c")]
+    predictions = tmp_path / "predictions.jsonl"
+    _write_jsonl(predictions, [p.model_dump(mode="json") for p in preds])
+    result = runner.invoke(app, ["decide", str(profile), "-p", str(predictions)])
+    assert result.exit_code == 0, result.output
+    assert "2 id(s) appear more than once" in result.output
+    assert "'a', 'c'" in result.output
+
+    unique = tmp_path / "unique.jsonl"
+    _write_jsonl(unique, [_pred("skip", 0.95, pid=i).model_dump(mode="json") for i in "abc"])
+    result = runner.invoke(app, ["decide", str(profile), "-p", str(unique)])
+    assert "more than once" not in result.output
