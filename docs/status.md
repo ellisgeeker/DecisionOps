@@ -1,7 +1,7 @@
 # Project status
 
-**Last updated:** 2026-10-24 (label loop measured, findings §10; next is release 0.1.1)
-**Version:** 0.1.0 (tagged and pushed 2026-10-24; not on PyPI; recertify/drift/shadow unreleased on main)
+**Last updated:** 2026-10-24 (0.1.1 released; next is certified selective risk or the showcase pack)
+**Version:** 0.1.1 (tagged and pushed 2026-10-24; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
 incomplete. Written so it is usable after a gap of days or weeks.
@@ -16,9 +16,13 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: release 0.1.1** (recertify / drift / shadow guide / loop measurement
-are on `main`, unreleased). Then certified conditional (selective) risk or the
-code-review showcase pack.
+**Next: pick one** — certified conditional (selective) risk (Learn-Then-Test;
+the question customers ask most) or the code-review showcase pack (#7/#9/#10).
+PyPI is still undecided.
+
+Done 2026-10-24 — 0.1.1 released: tag `v0.1.1` pushed. Adds recertify, drift,
+the shadow-mode guide, the loop measurement (findings §10) and the
+schedule-first recertify guidance. See CHANGELOG.
 
 Done 2026-10-24 — label loop measured end to end ([findings.md](findings.md) §10):
 

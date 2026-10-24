@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-10-24
+
+Closes the label loop after go-live: audit labels feed recertification, and a
+label-free monitor watches between runs.
 
 ### Added
 
@@ -12,6 +15,30 @@
   (PSI + KS) vs a baseline decisions window; exit 0/1/2 for ok/watch/recertify_suggested.
 - Library: `run_recertification`, `run_drift_monitor`, `load_outcomes`, `load_decisions`.
 - Docs: `docs/shadow-mode.md` and `scripts/run_shadow_mode_demo.py` (BANKING77 walkthrough).
+- `scripts/measure_label_loop.py` and findings §10: the loop measured end to end.
+
+### Measured
+
+On 200 simulated drifts (α=5%, closed-form true risk):
+
+- Drift roughly doubles the old threshold's true risk (0.049 → 0.095), above α
+  in every rep.
+- `recertify` on ~150 audit labels restores mean risk to 0.046–0.049.
+- Recertifying on organic escalations is worse than not recertifying (0.122):
+  `recertify` reads `audit=True` rows only.
+- `drift` cannot see concept drift (`ok` on 190/200 while risk doubled).
+
+### Changed
+
+- Operations guidance: **recertify on a schedule**; `drift` only brings a run
+  forward. A drift `ok` is not evidence the certificate still holds, and its
+  console note now says so.
+- Export scripts write repo-relative paths in committed stats files.
+
+### Known limits
+
+- Label delay and label noise are not modelled in the loop measurement.
+- Window-vs-staleness and low-volume label supply remain open (see `docs/status.md`).
 
 ## 0.1.0 — 2026-10-24
 
@@ -52,6 +79,7 @@ generic HTTP (never sends the gold label; refuses redirects).
 
 ### Known limits
 
+- No outcome feedback, `recertify` or drift monitor (added in 0.1.1).
 - Conditional (selective) risk and cascade thresholds are not certified.
 - Ordinal (Score) questions are not supported.
 - Validated on public benchmarks only (BANKING77, CLINC OOS), not production traffic.

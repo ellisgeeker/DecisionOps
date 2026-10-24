@@ -67,9 +67,10 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | High-probability certificates (`certify --confidence-level`) | done |
 | Weighted-loss CRC (`contract.severity`) | done |
 | v0.1.0 release | done |
-| Feedback format + `recertify` from audit rows | done on `main`, unreleased |
-| Label-free drift monitor (`drift`) | done on `main`, unreleased |
-| Shadow-mode guide | done on `main`, unreleased |
+| Feedback format + `recertify` from audit rows | done (0.1.1) |
+| Label-free drift monitor (`drift`) | done (0.1.1) |
+| Shadow-mode guide | done (0.1.1) |
+| Label loop measured end to end (findings §10) | done (0.1.1) |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
