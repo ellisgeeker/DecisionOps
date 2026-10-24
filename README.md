@@ -426,7 +426,6 @@ CI runs on Python 3.12 and 3.13 (`.github/workflows/ci.yml`).
 ## Docs
 
 - [`docs/shadow-mode.md`](docs/shadow-mode.md) — first certificate before go-live (audit → drift → recertify), with a BANKING77 walkthrough
-- `decisionops-plan.md` — product plan
 - `decisionops-foundations.md` — theory notes
 
 ## License

@@ -32,6 +32,14 @@ from sklearn.svm import LinearSVC
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _rel(path: Path) -> str:
+    """Repo-relative path for committed stats, so they carry no local paths."""
+    try:
+        return str(Path(path).resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _require_datasets():
     try:
         from datasets import load_dataset
@@ -161,7 +169,7 @@ def _write_predictions(
                 )
                 + "\n"
             )
-    return {"rows": n_correct_probs, "path": str(path)}
+    return {"rows": n_correct_probs, "path": _rel(path)}
 
 
 def main() -> None:

@@ -30,6 +30,14 @@ from sklearn.pipeline import Pipeline
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _rel(path: Path) -> str:
+    """Repo-relative path for committed stats, so they carry no local paths."""
+    try:
+        return str(Path(path).resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _require_datasets():
     try:
         from datasets import load_dataset  # noqa: F401
@@ -170,7 +178,7 @@ def _train_and_export(
         "n_train_fit": len(texts_train),
         "accuracy_eval": acc,
         "mean_max_prob": mean_conf,
-        "out_dir": str(out_dir),
+        "out_dir": _rel(out_dir),
         "protocol": "fit_train_export_heldout",
     }
     (out_dir / "build_stats.json").write_text(

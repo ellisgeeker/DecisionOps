@@ -24,6 +24,14 @@ from decisionops.io import load_dataset
 from decisionops.schemas import DecisionCase
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _rel(path: Path) -> str:
+    """Repo-relative path for committed stats, so they carry no local paths."""
+    try:
+        return str(Path(path).resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
 PACK_DIRS = {"banking77": "banking77", "clinc": "clinc_oos", "toy": "toy-routing"}
 
 
@@ -118,8 +126,8 @@ def main() -> None:
         "builtin_temperature": not args.no_builtin_temperature,
         "seconds_total": round(elapsed, 1),
         "ms_per_case": round(elapsed / len(preds) * 1000, 1),
-        "predictions": str(pred_path),
-        "dataset_subset": str(subset_path),
+        "predictions": _rel(pred_path),
+        "dataset_subset": _rel(subset_path),
     }
     (out_dir / f"{name}_stats.json").write_text(
         json.dumps(stats, indent=2) + "\n", encoding="utf-8"

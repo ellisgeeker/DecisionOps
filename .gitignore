@@ -50,3 +50,6 @@ examples/banking77/**/*.jsonl
 examples/clinc_oos/**/*.jsonl
 # Local shadow-mode demo outputs
 examples/banking77/shadow-demo/
+
+# Private product plan (kept local, never committed)
+decisionops-plan.md
