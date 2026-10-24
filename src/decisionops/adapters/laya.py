@@ -117,6 +117,25 @@ def laya_question(
     }
 
 
+NO_BUILTIN_TEMPERATURE_SUFFIX = "+no-builtin-temperature"
+
+
+def laya_model_id(
+    name: str, *, subdir: str | None = None, apply_builtin_temperature: bool = True
+) -> str:
+    """
+    Model id recorded on every prediction.
+
+    The bundled temperature changes the probabilities, so a certificate issued
+    with it on does not apply with it off (and vice versa). Putting the setting
+    in the id lets `decide()`'s model guard refuse the mismatch.
+    """
+    model_id = f"{name}/{subdir}" if subdir else name
+    if not apply_builtin_temperature:
+        model_id += NO_BUILTIN_TEMPERATURE_SUFFIX
+    return model_id
+
+
 class LayaProvider:
     """
     Local Laya decision model.
@@ -167,9 +186,11 @@ class LayaProvider:
         self.instructions = instructions
         self.descriptions = dict(descriptions or {})
         self.contract_instructions = contract_instructions
-        self.model_name = self.cfg.get("model_name", "laya")
-        if subdir:
-            self.model_name = f"{self.model_name}/{subdir}"
+        self.model_name = laya_model_id(
+            self.cfg.get("model_name", "laya"),
+            subdir=subdir,
+            apply_builtin_temperature=apply_builtin_temperature,
+        )
 
     # ---------------------------------------------------------------- internals
 

@@ -73,6 +73,8 @@ def test_builtin_temperature_flag_changes_sharpness(provider):
     # Same argmax ranking source, different reported sharpness.
     assert with_temp.metadata["temperature_applied"] != raw.metadata["temperature_applied"]
     assert raw.metadata["temperature_applied"] == 1.0
+    # The setting is part of the model id, so a profile cannot cross over.
+    assert raw.model == f"{with_temp.model}+no-builtin-temperature"
 
 
 def test_batch_matches_single(provider):

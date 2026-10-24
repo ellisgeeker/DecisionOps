@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-23 (audit sampling in `decide()` done; next is the v0.1.0 release)
+**Last updated:** 2026-10-23 (Laya temperature guard fixed; next is weighted-loss CRC, then v0.1.0)
 **Version:** 0.1.0a1 (unreleased)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,8 +16,46 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: roadmap #11.2 — v0.1.0 release.** The rest of the label loop
-(feedback format, `recertify`, drift monitor) is 0.1.x; see *Label strategy*.
+**Next: roadmap #11.2 — weighted (severity) loss in CRC**, then the v0.1.0
+release. Decided 2026-10-23: weighted loss goes *into* v0.1 because it changes
+contract and profile semantics; shipping 0-1 only and adding it later would be
+a breaking change. Today CRC counts every auto-path miss as 1, so "auto-skipped
+something that needed a human" weighs the same as "auto-skipped something that
+needed an LLM review"; contract `costs` feed only `cascade`.
+
+Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
+
+1. ~~Laya builtin-temperature guard~~ — done 2026-10-23, below.
+2. Weighted-loss CRC (contract-level per-miss severity, bounded loss `B`;
+   high-probability mode stays 0-1 only unless a bound for bounded losses is
+   added).
+3. v0.1.0 release.
+4. Feedback format + `recertify` from audit rows only; validate with simulated
+   drift on benchmark pools.
+5. Certified conditional (selective) risk via Learn-Then-Test; certified
+   cascade thresholds (today the cascade curve is empirical, two-stage,
+   oracle-priced).
+6. Score (ordinal) risk design; the #7/#9/#10 showcase bundle.
+
+Real-traffic validation follows the loop, so it tests the whole mechanism.
+Isotonic in CRC is **not** planned: it is monotone, so it does not reorder
+confidence, and CRC depends only on the order.
+
+Done 2026-10-23 — Laya builtin-temperature guard:
+
+- Bug: the profile did not record whether Laya's bundled temperature was on.
+  The setting lived only in per-prediction `metadata`, and `model` was the
+  same either way, so a profile certified with it on silently accepted
+  predictions made with it off — a threshold applied to different
+  probabilities.
+- Fix: `laya_model_id()` appends `+no-builtin-temperature` to the model id
+  when it is off, so `decide()`'s existing model guard refuses the cross-over.
+  Default (on) ids are unchanged, so existing on-mode profiles still load.
+- Tests: `tests/test_laya_model_id.py` (runs in CI, no torch) and an extra
+  assertion in the torch-gated `tests/test_laya_adapter.py`.
+- Committed `gate-laya_rawT` reports were produced with it off and still say
+  `rl-agent`; they are reports, not profiles, so nothing breaks. Regenerate
+  only if they are rebuilt for another reason.
 
 Done 2026-10-23 — roadmap #11.1, audit sampling in `decide()`:
 
@@ -116,9 +154,9 @@ Just finished — roadmap #6, certified profile + `decide()` (`src/decisionops/d
 - Regression test `test_decide_reproduces_certified_test_numbers`: `decide()`
   on the held-out split must reproduce the certificate's `n_accepted` and
   joint error exactly.
-- Not covered: isotonic (CRC uses temperature only), the Laya builtin
-  temperature flag (not recorded in the profile), and drift or recertification
-  triggers (roadmap 11).
+- Not covered: isotonic (CRC uses temperature only; not planned, see above)
+  and drift or recertification triggers (roadmap 11). The Laya builtin
+  temperature flag is now in the model id (2026-10-23).
 
 Context from earlier work:
 
@@ -202,10 +240,11 @@ is dropped from the roadmap.
 11. **Wrap-up** — in progress. ~~CRC `confidence_level` API~~ done
     2026-09-27. Remaining, in order:
     1. ~~**Audit sampling in `decide()`**~~ — done 2026-10-23.
-    2. **v0.1.0 release** — **next** — commit, remote repo, top-level public API
+    2. **Weighted-loss CRC** — **next**, in v0.1 (decided 2026-10-23).
+    3. **v0.1.0 release** — remote repo, top-level public API
        (`decide`, `run_certification`, `load_profile`, …), delete dead
        `report/json_report.py`, bump `0.1.0a1` → `0.1.0`, changelog, tag.
-    3. **0.1.x: closing the label loop** — outcome feedback format,
+    4. **0.1.x: closing the label loop** — outcome feedback format,
        `recertify` from audit samples only, label-free drift monitor. See
        *Label strategy*.
     The #7/#9/#10 bundle is the public demo after the release.
@@ -357,7 +396,7 @@ in tree.
 
 ### Validation performed
 
-- **151 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **153 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).
