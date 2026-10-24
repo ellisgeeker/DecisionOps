@@ -10,6 +10,7 @@ from decisionops.calibration.temperature import (
     apply_temperature_to_pairs,
     fit_temperature,
 )
+from decisionops.conformal.certify import CertifiedLevel, run_certification
 from decisionops.contract import DecisionContract, auto_set_of
 from decisionops.io import align_cases_and_predictions
 from decisionops.metrics import (
@@ -162,71 +163,77 @@ def _coverage_at(thresholds: list[ThresholdRecommendation], target: float) -> fl
     return None
 
 
-def _gate_verdict(raw: ConditionResult, calibrated: ConditionResult | None) -> GateVerdict:
+def _gate_verdict(
+    raw: ConditionResult,
+    calibrated: ConditionResult | None,
+    cert_level: CertifiedLevel | None,
+    *,
+    verdict_alpha: float,
+    min_coverage: float,
+    cert_error: str | None = None,
+) -> GateVerdict:
+    """
+    Verdict from the CRC certificate at `verdict_alpha`; ECE is context only.
+
+    Calibration and automation are independent axes (findings §3): a model can
+    reach excellent ECE and still certify nothing, or be well calibrated out of
+    the box and automate most traffic. So ECE never moves the verdict.
+    """
     notes: list[str] = []
+
+    cert = cert_level.certificate if cert_level is not None else None
+    feasible = bool(cert is not None and cert.feasible and cert_level.test is not None)
+    coverage = float(cert_level.test["coverage"]) if feasible else None
+    joint = float(cert_level.test["joint_error_rate"]) if feasible else None
+
+    if not feasible:
+        recommendation = "no-go"
+        if cert_error is not None:
+            notes.append(f"No certificate at {verdict_alpha:.0%}: {cert_error}")
+        else:
+            notes.append(
+                f"No certified threshold at {verdict_alpha:.0%} joint automated error "
+                "rate: nothing can run automatically at this risk."
+            )
+            if cert is not None:
+                notes.extend(cert.notes[:1])
+    elif coverage >= min_coverage:
+        recommendation = "go"
+        notes.append(
+            f"Certified at {verdict_alpha:.0%}: {coverage:.1%} of test traffic auto-accepted "
+            f"(>= {min_coverage:.0%})."
+        )
+    else:
+        recommendation = "watch"
+        notes.append(
+            f"Certified at {verdict_alpha:.0%}, but only {coverage:.1%} of test traffic is "
+            f"auto-accepted (< {min_coverage:.0%}). Savings may not justify integration."
+        )
+
     ece_improved = False
     rel_drop: float | None = None
-
     if calibrated is not None and raw.ece > 1e-12:
         rel_drop = (raw.ece - calibrated.ece) / raw.ece
         ece_improved = calibrated.ece < raw.ece - 1e-6
-        if ece_improved and rel_drop is not None and rel_drop >= 0.15:
-            notes.append(f"ECE improved by {rel_drop:.0%} after temperature scaling.")
-        elif ece_improved:
-            notes.append("ECE improved only marginally after temperature scaling.")
-        else:
-            notes.append("Temperature scaling did not improve ECE on the test split.")
-    elif calibrated is None:
-        notes.append("Calibration was not run; verdict based on raw probabilities only.")
+        notes.append(
+            f"Context: temperature scaling changed ECE {raw.ece:.3f} -> {calibrated.ece:.3f} "
+            f"({rel_drop:+.0%} drop). Not used in the verdict."
+        )
 
     focus = calibrated or raw
-    cov1 = _coverage_at(focus.thresholds, 0.01)
-    cov5 = _coverage_at(focus.thresholds, 0.05)
-
-    in_band: bool | None = None
-    if cov1 is not None:
-        # Band from the feasibility analysis: automation neither empty nor trivial.
-        in_band = 0.15 <= cov1 <= 0.75
-        if cov1 < 0.05:
-            notes.append(
-                f"@1% risk coverage is very low ({cov1:.1%}); little room to automate."
-            )
-        elif cov1 > 0.95:
-            notes.append(
-                f"@1% risk coverage is very high ({cov1:.1%}); "
-                "thresholding may be unnecessary."
-            )
-        elif in_band:
-            notes.append(f"@1% risk coverage={cov1:.1%} sits in a usable automation band.")
-        else:
-            notes.append(f"@1% risk coverage={cov1:.1%} is outside the preferred 15–75% band.")
-
-    # Recommendation heuristic (not a business decision).
-    strong = (
-        calibrated is not None
-        and ece_improved
-        and rel_drop is not None
-        and rel_drop >= 0.15
-        and in_band
-    )
-    mild = (calibrated is not None and (ece_improved or in_band)) or (
-        calibrated is None and in_band
-    )
-    if strong:
-        recommendation = "go"
-    elif mild:
-        recommendation = "watch"
-    else:
-        recommendation = "no-go"
-
     return GateVerdict(
+        recommendation=recommendation,
+        verdict_alpha=verdict_alpha,
+        min_coverage=min_coverage,
+        certified_feasible=feasible,
+        certified_threshold=cert.threshold if feasible else None,
+        certified_coverage=coverage,
+        certified_joint_error=joint,
         ece_improved=ece_improved,
         ece_relative_drop=rel_drop,
-        coverage_at_1pct=cov1,
-        coverage_at_5pct=cov5,
-        coverage_in_band_1pct=in_band,
+        coverage_at_1pct=_coverage_at(focus.thresholds, 0.01),
+        coverage_at_5pct=_coverage_at(focus.thresholds, 0.05),
         notes=notes,
-        recommendation=recommendation,
     )
 
 
@@ -242,6 +249,9 @@ def run_gate(
     provider: str | None = None,
     model: str | None = None,
     contract: DecisionContract | None = None,
+    verdict_alpha: float = 0.05,
+    min_coverage: float = 0.30,
+    temp_ratio: float = 0.2,
 ) -> GateReport:
     """
     Technical gate protocol:
@@ -250,11 +260,18 @@ def run_gate(
     2. Fit temperature (optional) on calibration
     3. Choose risk thresholds on calibration
     4. Report metrics + threshold performance on test only
+    5. Verdict from a CRC certificate at `verdict_alpha`, computed with the same
+       seed / cal_ratio / temp_ratio / contract as `decisionops certify`, so the
+       two commands agree on feasibility and coverage.
 
     With a `contract`, thresholds and risk-coverage count only errors on the
     automatic choices; escalations are never risk. Calibration metrics (ECE,
     Brier, NLL) are unaffected — they describe the probabilities, not the policy.
     """
+    if not 0.0 < verdict_alpha < 1.0:
+        raise ValueError(f"verdict_alpha must be in (0, 1), got {verdict_alpha}")
+    if not 0.0 <= min_coverage <= 1.0:
+        raise ValueError(f"min_coverage must be in [0, 1], got {min_coverage}")
     if target_risks is None:
         target_risks = [0.01, 0.05, 0.10]
     if contract is not None:
@@ -333,7 +350,32 @@ def run_gate(
             _condition_on_split(cal_iso, test_iso, name="isotonic")
         )
 
-    verdict = _gate_verdict(raw_condition, calibrated_condition)
+    cert_level: CertifiedLevel | None = None
+    cert_error: str | None = None
+    try:
+        cert = run_certification(
+            cases,
+            predictions,
+            alphas=[verdict_alpha],
+            cal_ratio=cal_ratio,
+            temp_ratio=temp_ratio if calibrate else 0.0,
+            seed=seed,
+            calibrate=calibrate,
+            contract=contract,
+        )
+        cert_level = cert.levels[0]
+    except ValueError as exc:
+        # Pools too small for the three-way split: no certificate, not a crash.
+        cert_error = str(exc)
+
+    verdict = _gate_verdict(
+        raw_condition,
+        calibrated_condition,
+        cert_level,
+        verdict_alpha=verdict_alpha,
+        min_coverage=min_coverage,
+        cert_error=cert_error,
+    )
 
     return GateReport(
         split=SplitInfo(
@@ -355,6 +397,7 @@ def run_gate(
         latency=latency_stats(preds_all),
         metadata={
             "protocol": "cal_test_split",
+            "verdict_basis": "crc_certificate",
             "contract": contract.summary() if contract is not None else None,
         },
     )

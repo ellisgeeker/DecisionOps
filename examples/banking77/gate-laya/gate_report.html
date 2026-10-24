@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DecisionOps Gate</title>
+<style>
+    :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #5c5c5c; --bg: #f7f7f4; --card: #fff; --line: #222; --accent: #0b57d0; --warn: #a15c00; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #eee; --muted: #aaa; --bg: #161616; --card: #1e1e1e; --line: #ddd; --accent: #8ab4f8; --warn: #f5c16c; }
+    }
+    body { margin: 0 auto; max-width: 960px; padding: 24px 20px 64px; font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+    .sub, .hint, figcaption { color: var(--muted); }
+    .hint { font-size: 0.85rem; margin: 4px 0 0; }
+    table { border-collapse: collapse; width: 100%; background: var(--card); }
+    th, td { border-bottom: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); padding: 6px 10px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+    figure { margin: 0; background: var(--card); padding: 8px 8px 12px; }
+    svg { width: 100%; height: auto; }
+    svg line, svg polyline { stroke: var(--line); fill: none; stroke-width: 1; }
+    svg .diag { stroke-dasharray: 4 4; opacity: 0.6; }
+    svg .curve { stroke: var(--accent); stroke-width: 2; }
+    svg .target { stroke: var(--warn); stroke-dasharray: 3 3; }
+    svg .target-label { fill: var(--warn); font-size: 10px; }
+    svg .dot { fill: var(--accent); fill-opacity: 0.75; stroke: none; }
+    svg .dot-sm { fill: var(--accent); }
+    svg text { fill: var(--muted); font-size: 10px; }
+    svg .plot-bg { fill: transparent; stroke: none; }
+    .verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+    .verdict.go { background: #d1f0d5; color: #0d5c1f; }
+    .verdict.watch { background: #ffe7c2; color: #7a4b00; }
+    .verdict.no-go { background: #ffd5d5; color: #8b1212; }
+    ul.notes { padding-left: 18px; }
+    </style>
+</head>
+<body>
+
+        <h1>DecisionOps technical gate</h1>
+        <p class="sub">n_total=3076
+          n_cal=923
+          n_test=2153
+          seed=42
+          provider=laya model=rl-agent</p>
+        <p class="sub">temperature T=6.5548. Thresholds below are <strong>empirical</strong>
+          (fit on calibration). For a finite-sample bound use
+          <code>decisionops certify</code>.</p>
+        <p>Verdict: <span class="verdict no-go">no-go</span>
+          <span class="hint">CRC certificate at 5%: infeasible; go needs ≥ 30%</span></p>
+        <h2>Test metrics</h2>
+        <table>
+          <thead><tr><th>Condition</th><th>Accuracy</th><th>ECE</th><th>Brier</th><th>NLL</th></tr></thead>
+          <tbody><tr><td>raw</td><td>0.3748</td><td>0.6026</td><td>1.2213</td><td>15.0418</td></tr><tr><td>temperature_scaled</td><td>0.3748</td><td>0.0563</td><td>0.8392</td><td>3.1767</td></tr><tr><td>isotonic</td><td>0.3748</td><td>0.1413</td><td>0.8968</td><td>7.5763</td></tr></tbody>
+        </table>
+        <h2>Charts</h2>
+        <div class="charts">
+    <figure>
+      <figcaption>Reliability (raw)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (raw)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="151.2" cy="280.0" r="4.3" class="dot"><title>[0.20,0.30] n=2 conf=0.275 acc=0.000</title></circle><circle cx="181.5" cy="280.0" r="4.4" class="dot"><title>[0.30,0.40] n=4 conf=0.355 acc=0.000</title></circle><circle cx="222.0" cy="280.0" r="4.4" class="dot"><title>[0.40,0.50] n=5 conf=0.463 acc=0.000</title></circle><circle cx="255.7" cy="192.0" r="5.0" class="dot"><title>[0.50,0.60] n=30 conf=0.553 acc=0.333</title></circle><circle cx="295.1" cy="244.0" r="4.8" class="dot"><title>[0.60,0.70] n=22 conf=0.657 acc=0.136</title></circle><circle cx="330.9" cy="219.7" r="5.1" class="dot"><title>[0.70,0.80] n=35 conf=0.752 acc=0.229</title></circle><circle cx="370.6" cy="222.0" r="5.1" class="dot"><title>[0.80,0.90] n=41 conf=0.858 acc=0.220</title></circle><circle cx="422.8" cy="178.1" r="12.0" class="dot"><title>[0.90,1.00] n=2014 conf=0.997 acc=0.386</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
+      <figcaption>Reliability (temperature-scaled)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (temperature-scaled)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="73.5" cy="228.9" r="5.1" class="dot"><title>[0.00,0.10] n=31 conf=0.068 acc=0.194</title></circle><circle cx="104.7" cy="247.0" r="5.4" class="dot"><title>[0.10,0.20] n=56 conf=0.151 acc=0.125</title></circle><circle cx="146.8" cy="244.5" r="6.0" class="dot"><title>[0.20,0.30] n=104 conf=0.263 acc=0.135</title></circle><circle cx="181.0" cy="216.9" r="7.1" class="dot"><title>[0.30,0.40] n=251 conf=0.354 acc=0.239</title></circle><circle cx="222.4" cy="168.9" r="12.0" class="dot"><title>[0.40,0.50] n=1711 conf=0.464 acc=0.421</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
+      <figcaption>Reliability (isotonic)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (isotonic)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="110.1" cy="280.0" r="4.2" class="dot"><title>[0.10,0.20] n=1 conf=0.165 acc=0.000</title></circle><circle cx="146.9" cy="220.0" r="5.1" class="dot"><title>[0.20,0.30] n=22 conf=0.263 acc=0.227</title></circle><circle cx="187.7" cy="207.9" r="7.5" class="dot"><title>[0.30,0.40] n=205 conf=0.372 acc=0.273</title></circle><circle cx="231.9" cy="222.9" r="11.1" class="dot"><title>[0.40,0.50] n=846 conf=0.489 acc=0.216</title></circle><circle cx="262.4" cy="142.3" r="12.0" class="dot"><title>[0.50,0.60] n=1079 conf=0.570 acc=0.522</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
+      <figcaption>Risk–coverage (test, empirical)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Risk–coverage (test, empirical)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">coverage (auto-accepted)</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">selective risk</text>
+    
+        <line x1="48.0" y1="277.4" x2="424.0" y2="277.4" class="target" /><text x="420.0" y="273.4" text-anchor="end" class="target-label">1% risk</text><line x1="48.0" y1="266.8" x2="424.0" y2="266.8" class="target" /><text x="420.0" y="262.8" text-anchor="end" class="target-label">5% risk</text><line x1="48.0" y1="253.6" x2="424.0" y2="253.6" class="target" /><text x="420.0" y="249.6" text-anchor="end" class="target-label">10% risk</text>
+        
+        
+      </svg>
+      <p class="hint">More automation is to the right. Higher error is up. Empirical, not CRC.</p>
+    </figure>
+    </div>
+        <h2>Empirical thresholds on test</h2>
+        <table>
+          <thead><tr><th>Condition</th><th>Target</th><th>Thr (cal)</th><th>Coverage</th><th>Sel. risk</th><th>Accepted</th></tr></thead>
+          <tbody><tr><td>raw</td><td>1%</td><td>1.000</td><td>41.2%</td><td>0.4471</td><td>888/2153</td></tr><tr><td>raw</td><td>5%</td><td>1.000</td><td>41.2%</td><td>0.4471</td><td>888/2153</td></tr><tr><td>raw</td><td>10%</td><td>1.000</td><td>41.2%</td><td>0.4471</td><td>888/2153</td></tr><tr><td>temperature_scaled</td><td>1%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/2153</td></tr><tr><td>temperature_scaled</td><td>5%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/2153</td></tr><tr><td>temperature_scaled</td><td>10%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/2153</td></tr><tr><td>isotonic</td><td>1%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/2153</td></tr><tr><td>isotonic</td><td>5%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/2153</td></tr><tr><td>isotonic</td><td>10%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/2153</td></tr></tbody>
+        </table>
+        <h2>Notes</h2>
+        <ul class="notes"><li>No certified threshold at 5% joint automated error rate: nothing can run automatically at this risk.</li><li>No calibration confidence level satisfies the bound; abstain on all traffic or improve the model before automating at this alpha.</li><li>Context: temperature scaling changed ECE 0.603 -&gt; 0.056 (+91% drop). Not used in the verdict.</li></ul>
+        
+</body>
+</html>

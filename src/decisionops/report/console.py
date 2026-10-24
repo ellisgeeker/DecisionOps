@@ -158,17 +158,24 @@ def print_gate_report(report: GateReport, console: Console | None = None) -> Non
     color = {"go": "green", "watch": "yellow", "no-go": "red"}.get(v.recommendation, "white")
     console.print()
     console.print(f"[bold {color}]Verdict: {v.recommendation.upper()}[/bold {color}]")
-    if v.ece_relative_drop is not None:
-        console.print(f"ECE relative drop: {v.ece_relative_drop:.1%}")
-    if v.coverage_at_1pct is not None:
-        console.print(f"Coverage @ 1% risk (focus condition): {v.coverage_at_1pct:.1%}")
-    if v.coverage_at_5pct is not None:
-        console.print(f"Coverage @ 5% risk (focus condition): {v.coverage_at_5pct:.1%}")
-    for note in v.notes:
-        console.print(f"• {note}")
     console.print(
-        "[dim]Heuristic gate only — not conformal-certified; "
-        "not a substitute for domain review.[/dim]"
+        f"Basis: CRC certificate at {v.verdict_alpha:.0%} joint automated error rate; "
+        f"go needs certified test coverage >= {v.min_coverage:.0%}"
+    )
+    if v.certified_feasible and v.certified_coverage is not None:
+        console.print(
+            f"Certified @ {v.verdict_alpha:.0%}: threshold={v.certified_threshold:.4f}  "
+            f"coverage (test)={v.certified_coverage:.1%}  "
+            f"joint err (test)={v.certified_joint_error:.4f}"
+        )
+    else:
+        console.print(f"Certified @ {v.verdict_alpha:.0%}: [red]infeasible[/red]")
+    for note in v.notes:
+        console.print(f"• {escape(note)}")
+    console.print(
+        "[dim]ECE and the empirical thresholds above are context, not the verdict. "
+        "The coverage bar is a policy choice (--min-coverage); tune it to your cost "
+        "of escalation.[/dim]"
     )
     console.print()
 

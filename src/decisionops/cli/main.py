@@ -410,9 +410,28 @@ def gate_cmd(
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
     jev_question: JevQuestionOption = None,
+    verdict_alpha: Annotated[
+        float,
+        typer.Option(
+            "--verdict-alpha",
+            help="Joint automated error rate the go/watch/no-go verdict is certified at.",
+        ),
+    ] = 0.05,
+    min_coverage: Annotated[
+        float,
+        typer.Option(
+            "--min-coverage",
+            help="Certified test coverage needed for 'go' (share of traffic automated). "
+            "A policy choice: set it from your cost of escalation.",
+        ),
+    ] = 0.30,
 ) -> None:
     """
     Technical gate: cal/test split, optional temperature + isotonic, held-out metrics.
+
+    The verdict comes from a CRC certificate at --verdict-alpha: no-go if none
+    exists, watch if its test coverage is below --min-coverage, else go. ECE is
+    reported for context and never decides the verdict.
 
     Examples:
       decisionops gate data.jsonl -p preds.jsonl
@@ -423,6 +442,10 @@ def gate_cmd(
         raise typer.BadParameter("--n-bins must be >= 1")
     if not 0.0 < cal_ratio < 1.0:
         raise typer.BadParameter("--cal-ratio must be in (0, 1)")
+    if not 0.0 < verdict_alpha < 1.0:
+        raise typer.BadParameter("--verdict-alpha must be in (0, 1)")
+    if not 0.0 <= min_coverage <= 1.0:
+        raise typer.BadParameter("--min-coverage must be in [0, 1]")
 
     risks = _parse_risks(target_risks)
     decision_contract = _load_contract_option(contract)
@@ -448,6 +471,8 @@ def gate_cmd(
             target_risks=risks,
             calibrate=calibrate,
             contract=decision_contract,
+            verdict_alpha=verdict_alpha,
+            min_coverage=min_coverage,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc

@@ -160,3 +160,21 @@ def test_gate_still_runs_with_dash_p(tmp_path):
     result = runner.invoke(app, ["gate", str(dataset), "-p", str(predictions)])
     assert result.exit_code == 0, result.output
     assert "Technical Gate" in result.output
+    assert "Basis: CRC certificate at 5%" in result.output
+
+
+def test_gate_verdict_flags(tmp_path):
+    dataset, predictions = _write_pair(tmp_path, n=400)
+    result = runner.invoke(
+        app,
+        [
+            "gate", str(dataset), "-p", str(predictions),
+            "--verdict-alpha", "0.10", "--min-coverage", "0.5",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "CRC certificate at 10%" in result.output
+    assert ">= 50%" in result.output
+    for flag, value in [("--verdict-alpha", "0"), ("--min-coverage", "1.5")]:
+        bad = runner.invoke(app, ["gate", str(dataset), "-p", str(predictions), flag, value])
+        assert bad.exit_code != 0, flag

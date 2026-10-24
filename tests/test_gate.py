@@ -133,3 +133,84 @@ def test_gate_on_synthetic_2000():
     # Temperature fit should be finite
     assert math.isfinite(report.temperature or float("nan"))
     assert report.isotonic_fit.get("n_calibration", 0) > 0
+
+
+def _pool(n: int, *, conf_good: float, conf_bad: float, err_every: int = 10):
+    """Binary pool: every `err_every`-th case wrong, at `conf_bad`; rest right at `conf_good`."""
+    cases, preds = [], []
+    for i in range(n):
+        correct = i % err_every != 0
+        conf = conf_good if correct else conf_bad
+        cases.append(DecisionCase(id=str(i), choices=["a", "b"], label="a" if correct else "b"))
+        preds.append(
+            DecisionPrediction(id=str(i), prediction="a", probabilities={"a": conf, "b": 1 - conf})
+        )
+    return cases, preds
+
+
+def test_verdict_go_when_certified_coverage_clears_the_bar():
+    # Separable: errors sit at 0.55, so a 5% certificate accepts the ~90% correct mass.
+    cases, preds = _pool(600, conf_good=0.97, conf_bad=0.55)
+    v = run_gate(cases, preds, calibrate=False).verdict
+    assert v.recommendation == "go"
+    assert v.certified_feasible and v.certified_coverage >= 0.30
+    assert v.verdict_alpha == 0.05 and v.min_coverage == 0.30
+
+
+def test_verdict_watch_when_certified_but_below_min_coverage():
+    cases, preds = _pool(600, conf_good=0.97, conf_bad=0.55)
+    v = run_gate(cases, preds, calibrate=False, min_coverage=0.99).verdict
+    assert v.certified_feasible
+    assert v.recommendation == "watch"
+
+
+def test_verdict_no_go_when_nothing_certifies():
+    # Errors carry the same confidence as correct cases and exceed 5%: no threshold holds.
+    cases, preds = _pool(600, conf_good=0.97, conf_bad=0.97, err_every=5)
+    v = run_gate(cases, preds, calibrate=False).verdict
+    assert not v.certified_feasible
+    assert v.recommendation == "no-go"
+    assert v.certified_coverage is None
+
+
+def test_verdict_no_go_on_pool_too_small_to_split():
+    cases, preds = _pool(8, conf_good=0.97, conf_bad=0.55)
+    v = run_gate(cases, preds).verdict
+    assert v.recommendation == "no-go"
+
+
+def test_ece_does_not_move_the_verdict():
+    """
+    Regression for the old rule, which required an ECE drop for 'go'.
+
+    A pool that is already calibrated (no ECE to gain) but certifies most traffic
+    must be 'go'; one where calibration slashes ECE but nothing certifies must be
+    'no-go'. On BANKING77 the old rule gave Jev (67% certified at 5%) and Laya
+    (infeasible) the same 'watch'.
+    """
+    cases, preds = _pool(600, conf_good=0.97, conf_bad=0.55)
+    good = run_gate(cases, preds, calibrate=True).verdict
+    assert good.recommendation == "go"
+
+    bad_cases, bad_preds = _pool(600, conf_good=0.99, conf_bad=0.99, err_every=3)
+    bad = run_gate(bad_cases, bad_preds, calibrate=True).verdict
+    assert bad.ece_relative_drop is not None and bad.ece_relative_drop > 0.15
+    assert bad.recommendation == "no-go"
+
+
+def test_gate_and_certify_agree_on_the_certificate():
+    from decisionops.conformal import run_certification
+
+    cases, preds = _pool(600, conf_good=0.97, conf_bad=0.55)
+    v = run_gate(cases, preds, seed=3).verdict
+    level = run_certification(cases, preds, alphas=[0.05], seed=3).levels[0]
+    assert v.certified_threshold == level.certificate.threshold
+    assert v.certified_coverage == pytest.approx(float(level.test["coverage"]))
+
+
+def test_gate_rejects_bad_verdict_parameters():
+    cases, preds = _pool(100, conf_good=0.97, conf_bad=0.55)
+    with pytest.raises(ValueError, match="verdict_alpha"):
+        run_gate(cases, preds, verdict_alpha=0.0)
+    with pytest.raises(ValueError, match="min_coverage"):
+        run_gate(cases, preds, min_coverage=1.5)

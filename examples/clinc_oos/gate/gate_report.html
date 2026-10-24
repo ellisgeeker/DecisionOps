@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DecisionOps Gate</title>
+<style>
+    :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #5c5c5c; --bg: #f7f7f4; --card: #fff; --line: #222; --accent: #0b57d0; --warn: #a15c00; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #eee; --muted: #aaa; --bg: #161616; --card: #1e1e1e; --line: #ddd; --accent: #8ab4f8; --warn: #f5c16c; }
+    }
+    body { margin: 0 auto; max-width: 960px; padding: 24px 20px 64px; font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+    .sub, .hint, figcaption { color: var(--muted); }
+    .hint { font-size: 0.85rem; margin: 4px 0 0; }
+    table { border-collapse: collapse; width: 100%; background: var(--card); }
+    th, td { border-bottom: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); padding: 6px 10px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+    figure { margin: 0; background: var(--card); padding: 8px 8px 12px; }
+    svg { width: 100%; height: auto; }
+    svg line, svg polyline { stroke: var(--line); fill: none; stroke-width: 1; }
+    svg .diag { stroke-dasharray: 4 4; opacity: 0.6; }
+    svg .curve { stroke: var(--accent); stroke-width: 2; }
+    svg .target { stroke: var(--warn); stroke-dasharray: 3 3; }
+    svg .target-label { fill: var(--warn); font-size: 10px; }
+    svg .dot { fill: var(--accent); fill-opacity: 0.75; stroke: none; }
+    svg .dot-sm { fill: var(--accent); }
+    svg text { fill: var(--muted); font-size: 10px; }
+    svg .plot-bg { fill: transparent; stroke: none; }
+    .verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+    .verdict.go { background: #d1f0d5; color: #0d5c1f; }
+    .verdict.watch { background: #ffe7c2; color: #7a4b00; }
+    .verdict.no-go { background: #ffd5d5; color: #8b1212; }
+    ul.notes { padding-left: 18px; }
+    </style>
+</head>
+<body>
+
+        <h1>DecisionOps technical gate</h1>
+        <p class="sub">n_total=8600
+          n_cal=2580
+          n_test=6020
+          seed=42
+          provider=sklearn model=tfidf-lr-C1.0</p>
+        <p class="sub">temperature T=0.4065. Thresholds below are <strong>empirical</strong>
+          (fit on calibration). For a finite-sample bound use
+          <code>decisionops certify</code>.</p>
+        <p>Verdict: <span class="verdict go">go</span>
+          <span class="hint">CRC certificate at 5%: 76.7% of test traffic auto-accepted; go needs ≥ 30%</span></p>
+        <h2>Test metrics</h2>
+        <table>
+          <thead><tr><th>Condition</th><th>Accuracy</th><th>ECE</th><th>Brier</th><th>NLL</th></tr></thead>
+          <tbody><tr><td>raw</td><td>0.8317</td><td>0.4313</td><td>0.4748</td><td>1.4488</td></tr><tr><td>temperature_scaled</td><td>0.8317</td><td>0.0366</td><td>0.2452</td><td>0.6796</td></tr><tr><td>isotonic</td><td>0.8317</td><td>0.0119</td><td>0.2693</td><td>0.8764</td></tr></tbody>
+        </table>
+        <h2>Charts</h2>
+        <div class="charts">
+    <figure>
+      <figcaption>Reliability (raw)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (raw)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="70.3" cy="152.1" r="12.0" class="dot"><title>[0.00,0.10] n=1100 conf=0.059 acc=0.485</title></circle><circle cx="102.8" cy="87.1" r="11.0" class="dot"><title>[0.10,0.20] n=843 conf=0.146 acc=0.731</title></circle><circle cx="141.6" cy="49.1" r="10.3" class="dot"><title>[0.20,0.30] n=685 conf=0.249 acc=0.874</title></circle><circle cx="179.6" cy="42.3" r="9.9" class="dot"><title>[0.30,0.40] n=593 conf=0.350 acc=0.901</title></circle><circle cx="217.8" cy="31.3" r="9.7" class="dot"><title>[0.40,0.50] n=552 conf=0.451 acc=0.942</title></circle><circle cx="254.7" cy="25.3" r="9.7" class="dot"><title>[0.50,0.60] n=565 conf=0.550 acc=0.965</title></circle><circle cx="292.4" cy="21.4" r="9.6" class="dot"><title>[0.60,0.70] n=541 conf=0.650 acc=0.980</title></circle><circle cx="329.0" cy="18.1" r="9.4" class="dot"><title>[0.70,0.80] n=509 conf=0.747 acc=0.992</title></circle><circle cx="366.4" cy="19.6" r="9.0" class="dot"><title>[0.80,0.90] n=438 conf=0.847 acc=0.986</title></circle><circle cx="399.8" cy="17.4" r="7.4" class="dot"><title>[0.90,1.00] n=194 conf=0.936 acc=0.995</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
+      <figcaption>Reliability (temperature-scaled)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (temperature-scaled)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="77.2" cy="208.9" r="4.6" class="dot"><title>[0.00,0.10] n=26 conf=0.078 acc=0.269</title></circle><circle cx="107.2" cy="210.4" r="5.5" class="dot"><title>[0.10,0.20] n=148 conf=0.157 acc=0.264</title></circle><circle cx="142.5" cy="176.1" r="5.7" class="dot"><title>[0.20,0.30] n=183 conf=0.251 acc=0.393</title></circle><circle cx="178.9" cy="153.8" r="5.8" class="dot"><title>[0.30,0.40] n=205 conf=0.348 acc=0.478</title></circle><circle cx="218.5" cy="158.5" r="5.9" class="dot"><title>[0.40,0.50] n=226 conf=0.453 acc=0.460</title></circle><circle cx="253.3" cy="143.2" r="6.1" class="dot"><title>[0.50,0.60] n=276 conf=0.546 acc=0.518</title></circle><circle cx="293.4" cy="124.2" r="6.0" class="dot"><title>[0.60,0.70] n=244 conf=0.653 acc=0.590</title></circle><circle cx="330.1" cy="104.9" r="6.2" class="dot"><title>[0.70,0.80] n=294 conf=0.750 acc=0.663</title></circle><circle cx="369.1" cy="59.3" r="6.7" class="dot"><title>[0.80,0.90] n=439 conf=0.854 acc=0.836</title></circle><circle cx="419.1" cy="25.4" r="12.0" class="dot"><title>[0.90,1.00] n=3979 conf=0.987 acc=0.965</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
+      <figcaption>Reliability (isotonic)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (isotonic)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="177.4" cy="182.5" r="6.7" class="dot"><title>[0.30,0.40] n=333 conf=0.344 acc=0.369</title></circle><circle cx="224.0" cy="145.0" r="6.0" class="dot"><title>[0.40,0.50] n=174 conf=0.468 acc=0.511</title></circle><circle cx="265.5" cy="137.8" r="7.4" class="dot"><title>[0.50,0.60] n=531 conf=0.578 acc=0.539</title></circle><circle cx="286.7" cy="103.3" r="6.4" class="dot"><title>[0.60,0.70] n=257 conf=0.635 acc=0.669</title></circle><circle cx="319.9" cy="87.5" r="7.4" class="dot"><title>[0.70,0.80] n=539 conf=0.723 acc=0.729</title></circle><circle cx="371.6" cy="48.9" r="9.3" class="dot"><title>[0.80,0.90] n=1261 conf=0.861 acc=0.875</title></circle><circle cx="413.6" cy="23.7" r="12.0" class="dot"><title>[0.90,1.00] n=2925 conf=0.972 acc=0.971</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
+      <figcaption>Risk–coverage (test, empirical)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Risk–coverage (test, empirical)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">coverage (auto-accepted)</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">selective risk</text>
+    
+        <line x1="48.0" y1="277.4" x2="424.0" y2="277.4" class="target" /><text x="420.0" y="273.4" text-anchor="end" class="target-label">1% risk</text><line x1="48.0" y1="266.8" x2="424.0" y2="266.8" class="target" /><text x="420.0" y="262.8" text-anchor="end" class="target-label">5% risk</text><line x1="48.0" y1="253.6" x2="424.0" y2="253.6" class="target" /><text x="420.0" y="249.6" text-anchor="end" class="target-label">10% risk</text>
+        <polyline points="221.2,276.4 243.9,275.7 257.6,274.5 266.7,273.7 273.6,273.3 279.3,272.6 284.4,272.2 288.8,271.8 293.6,271.1 296.5,270.6 300.4,270.4 303.5,270.3 306.6,269.5 310.0,268.9 312.2,268.8 313.8,268.8 316.4,268.3 318.4,268.0 321.2,267.8 323.9,267.3 325.6,267.0 328.0,266.5 329.4,266.2 331.5,265.6 333.3,265.4 334.7,265.2 336.4,264.4 338.6,263.7 340.7,263.0 342.3,262.5 344.4,261.7 345.9,261.2 347.6,260.8 348.9,260.6 350.2,260.4 351.8,259.8 353.1,259.6 354.9,259.0 356.4,258.5 357.5,258.1 358.7,257.8 359.8,257.4 361.6,256.8 363.4,256.3 365.2,255.7 367.2,255.0 369.0,254.4 370.7,254.1 372.4,253.3 374.8,252.5" class="curve" />
+        <circle cx="221.2" cy="276.4" r="2.4" class="dot-sm"><title>t=0.99 cov=46.1% risk=0.014</title></circle><circle cx="243.9" cy="275.7" r="2.4" class="dot-sm"><title>t=0.98 cov=52.1% risk=0.016</title></circle><circle cx="257.6" cy="274.5" r="2.4" class="dot-sm"><title>t=0.97 cov=55.7% risk=0.021</title></circle><circle cx="266.7" cy="273.7" r="2.4" class="dot-sm"><title>t=0.96 cov=58.2% risk=0.024</title></circle><circle cx="273.6" cy="273.3" r="2.4" class="dot-sm"><title>t=0.95 cov=60.0% risk=0.025</title></circle><circle cx="279.3" cy="272.6" r="2.4" class="dot-sm"><title>t=0.94 cov=61.5% risk=0.028</title></circle><circle cx="284.4" cy="272.2" r="2.4" class="dot-sm"><title>t=0.93 cov=62.9% risk=0.030</title></circle><circle cx="288.8" cy="271.8" r="2.4" class="dot-sm"><title>t=0.92 cov=64.0% risk=0.031</title></circle><circle cx="293.6" cy="271.1" r="2.4" class="dot-sm"><title>t=0.91 cov=65.3% risk=0.034</title></circle><circle cx="296.5" cy="270.6" r="2.4" class="dot-sm"><title>t=0.90 cov=66.1% risk=0.035</title></circle><circle cx="300.4" cy="270.4" r="2.4" class="dot-sm"><title>t=0.89 cov=67.1% risk=0.036</title></circle><circle cx="303.5" cy="270.3" r="2.4" class="dot-sm"><title>t=0.88 cov=67.9% risk=0.037</title></circle><circle cx="306.6" cy="269.5" r="2.4" class="dot-sm"><title>t=0.87 cov=68.8% risk=0.040</title></circle><circle cx="310.0" cy="268.9" r="2.4" class="dot-sm"><title>t=0.86 cov=69.7% risk=0.042</title></circle><circle cx="312.2" cy="268.8" r="2.4" class="dot-sm"><title>t=0.85 cov=70.3% risk=0.042</title></circle><circle cx="313.8" cy="268.8" r="2.4" class="dot-sm"><title>t=0.84 cov=70.7% risk=0.043</title></circle><circle cx="316.4" cy="268.3" r="2.4" class="dot-sm"><title>t=0.83 cov=71.4% risk=0.044</title></circle><circle cx="318.4" cy="268.0" r="2.4" class="dot-sm"><title>t=0.82 cov=71.9% risk=0.045</title></circle><circle cx="321.2" cy="267.8" r="2.4" class="dot-sm"><title>t=0.81 cov=72.7% risk=0.046</title></circle><circle cx="323.9" cy="267.3" r="2.4" class="dot-sm"><title>t=0.80 cov=73.4% risk=0.048</title></circle><circle cx="325.6" cy="267.0" r="2.4" class="dot-sm"><title>t=0.79 cov=73.8% risk=0.049</title></circle><circle cx="328.0" cy="266.5" r="2.4" class="dot-sm"><title>t=0.78 cov=74.5% risk=0.051</title></circle><circle cx="329.4" cy="266.2" r="2.4" class="dot-sm"><title>t=0.77 cov=74.9% risk=0.052</title></circle><circle cx="331.5" cy="265.6" r="2.4" class="dot-sm"><title>t=0.76 cov=75.4% risk=0.054</title></circle><circle cx="333.3" cy="265.4" r="2.4" class="dot-sm"><title>t=0.75 cov=75.9% risk=0.055</title></circle><circle cx="334.7" cy="265.2" r="2.4" class="dot-sm"><title>t=0.74 cov=76.2% risk=0.056</title></circle><circle cx="336.4" cy="264.4" r="2.4" class="dot-sm"><title>t=0.73 cov=76.7% risk=0.059</title></circle><circle cx="338.6" cy="263.7" r="2.4" class="dot-sm"><title>t=0.72 cov=77.3% risk=0.062</title></circle><circle cx="340.7" cy="263.0" r="2.4" class="dot-sm"><title>t=0.71 cov=77.9% risk=0.064</title></circle><circle cx="342.3" cy="262.5" r="2.4" class="dot-sm"><title>t=0.70 cov=78.3% risk=0.066</title></circle><circle cx="344.4" cy="261.7" r="2.4" class="dot-sm"><title>t=0.69 cov=78.8% risk=0.069</title></circle><circle cx="345.9" cy="261.2" r="2.4" class="dot-sm"><title>t=0.68 cov=79.2% risk=0.071</title></circle><circle cx="347.6" cy="260.8" r="2.4" class="dot-sm"><title>t=0.67 cov=79.7% risk=0.073</title></circle><circle cx="348.9" cy="260.6" r="2.4" class="dot-sm"><title>t=0.66 cov=80.0% risk=0.073</title></circle><circle cx="350.2" cy="260.4" r="2.4" class="dot-sm"><title>t=0.65 cov=80.4% risk=0.074</title></circle><circle cx="351.8" cy="259.8" r="2.4" class="dot-sm"><title>t=0.64 cov=80.8% risk=0.076</title></circle><circle cx="353.1" cy="259.6" r="2.4" class="dot-sm"><title>t=0.63 cov=81.1% risk=0.077</title></circle><circle cx="354.9" cy="259.0" r="2.4" class="dot-sm"><title>t=0.62 cov=81.6% risk=0.079</title></circle><circle cx="356.4" cy="258.5" r="2.4" class="dot-sm"><title>t=0.61 cov=82.0% risk=0.082</title></circle><circle cx="357.5" cy="258.1" r="2.4" class="dot-sm"><title>t=0.60 cov=82.3% risk=0.083</title></circle><circle cx="358.7" cy="257.8" r="2.4" class="dot-sm"><title>t=0.59 cov=82.6% risk=0.084</title></circle><circle cx="359.8" cy="257.4" r="2.4" class="dot-sm"><title>t=0.58 cov=82.9% risk=0.086</title></circle><circle cx="361.6" cy="256.8" r="2.4" class="dot-sm"><title>t=0.57 cov=83.4% risk=0.088</title></circle><circle cx="363.4" cy="256.3" r="2.4" class="dot-sm"><title>t=0.56 cov=83.9% risk=0.090</title></circle><circle cx="365.2" cy="255.7" r="2.4" class="dot-sm"><title>t=0.55 cov=84.4% risk=0.092</title></circle><circle cx="367.2" cy="255.0" r="2.4" class="dot-sm"><title>t=0.54 cov=84.9% risk=0.095</title></circle><circle cx="369.0" cy="254.4" r="2.4" class="dot-sm"><title>t=0.53 cov=85.4% risk=0.097</title></circle><circle cx="370.7" cy="254.1" r="2.4" class="dot-sm"><title>t=0.52 cov=85.8% risk=0.098</title></circle><circle cx="372.4" cy="253.3" r="2.4" class="dot-sm"><title>t=0.51 cov=86.3% risk=0.101</title></circle><circle cx="374.8" cy="252.5" r="2.4" class="dot-sm"><title>t=0.50 cov=86.9% risk=0.104</title></circle>
+      </svg>
+      <p class="hint">More automation is to the right. Higher error is up. Empirical, not CRC.</p>
+    </figure>
+    </div>
+        <h2>Empirical thresholds on test</h2>
+        <table>
+          <thead><tr><th>Condition</th><th>Target</th><th>Thr (cal)</th><th>Coverage</th><th>Sel. risk</th><th>Accepted</th></tr></thead>
+          <tbody><tr><td>raw</td><td>1%</td><td>0.890</td><td>3.9%</td><td>0.0043</td><td>232/6020</td></tr><tr><td>raw</td><td>5%</td><td>0.500</td><td>37.3%</td><td>0.0187</td><td>2247/6020</td></tr><tr><td>raw</td><td>10%</td><td>0.500</td><td>37.3%</td><td>0.0187</td><td>2247/6020</td></tr><tr><td>temperature_scaled</td><td>1%</td><td>1.000</td><td>0.0%</td><td>1.0000</td><td>0/6020</td></tr><tr><td>temperature_scaled</td><td>5%</td><td>0.840</td><td>70.7%</td><td>0.0425</td><td>4255/6020</td></tr><tr><td>temperature_scaled</td><td>10%</td><td>0.550</td><td>84.4%</td><td>0.0920</td><td>5078/6020</td></tr><tr><td>isotonic</td><td>1%</td><td>0.990</td><td>1.1%</td><td>0.0149</td><td>67/6020</td></tr><tr><td>isotonic</td><td>5%</td><td>0.860</td><td>61.8%</td><td>0.0454</td><td>3723/6020</td></tr><tr><td>isotonic</td><td>10%</td><td>0.630</td><td>79.7%</td><td>0.0853</td><td>4797/6020</td></tr></tbody>
+        </table>
+        <h2>Notes</h2>
+        <ul class="notes"><li>Certified at 5%: 76.7% of test traffic auto-accepted (&gt;= 30%).</li><li>Context: temperature scaling changed ECE 0.431 -&gt; 0.037 (+92% drop). Not used in the verdict.</li></ul>
+        
+</body>
+</html>

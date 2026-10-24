@@ -342,6 +342,16 @@ def _gate_html(report: GateReport) -> str:
         else "temperature not applied"
     )
     rec = report.verdict.recommendation
+    v = report.verdict
+    basis = (
+        f"CRC certificate at {v.verdict_alpha:.0%}: "
+        + (
+            f"{v.certified_coverage:.1%} of test traffic auto-accepted"
+            if v.certified_feasible and v.certified_coverage is not None
+            else "infeasible"
+        )
+        + f"; go needs ≥ {v.min_coverage:.0%}"
+    )
     notes = "".join(f"<li>{_esc(n)}</li>" for n in report.verdict.notes)
 
     return _page(
@@ -357,7 +367,7 @@ def _gate_html(report: GateReport) -> str:
           (fit on calibration). For a finite-sample bound use
           <code>decisionops certify</code>.</p>
         <p>Verdict: <span class="verdict { _esc(rec) }">{_esc(rec)}</span>
-          <span class="hint">heuristic, not a certificate</span></p>
+          <span class="hint">{_esc(basis)}</span></p>
         <h2>Test metrics</h2>
         <table>
           <thead><tr><th>Condition</th><th>Accuracy</th><th>ECE</th><th>Brier</th><th>NLL</th></tr></thead>

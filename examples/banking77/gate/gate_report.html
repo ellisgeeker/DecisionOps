@@ -49,11 +49,11 @@
           (fit on calibration). For a finite-sample bound use
           <code>decisionops certify</code>.</p>
         <p>Verdict: <span class="verdict go">go</span>
-          <span class="hint">heuristic, not a certificate</span></p>
+          <span class="hint">CRC certificate at 5%: 91.5% of test traffic auto-accepted; go needs ≥ 30%</span></p>
         <h2>Test metrics</h2>
         <table>
           <thead><tr><th>Condition</th><th>Accuracy</th><th>ECE</th><th>Brier</th><th>NLL</th></tr></thead>
-          <tbody><tr><td>raw</td><td>0.8964</td><td>0.2561</td><td>0.2566</td><td>0.6979</td></tr><tr><td>temperature_scaled</td><td>0.8964</td><td>0.0206</td><td>0.1628</td><td>0.4144</td></tr></tbody>
+          <tbody><tr><td>raw</td><td>0.8964</td><td>0.2561</td><td>0.2566</td><td>0.6979</td></tr><tr><td>temperature_scaled</td><td>0.8964</td><td>0.0206</td><td>0.1628</td><td>0.4144</td></tr><tr><td>isotonic</td><td>0.8964</td><td>0.0129</td><td>0.1730</td><td>0.4758</td></tr></tbody>
         </table>
         <h2>Charts</h2>
         <div class="charts">
@@ -90,6 +90,22 @@
     </figure>
     
     <figure>
+      <figcaption>Reliability (isotonic)</figcaption>
+      <svg viewBox="0 0 440 320" role="img" aria-label="Reliability (isotonic)">
+        
+    <rect x="0" y="0" width="440" height="320" class="plot-bg" />
+    <line x1="48.0" y1="280.0" x2="424.0" y2="280.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="16.0" />
+    <line x1="48.0" y1="280.0" x2="48.0" y2="284.0" /><text x="48.0" y="296.0" text-anchor="middle">0.00</text><line x1="48.0" y1="280.0" x2="44.0" y2="280.0" /><text x="40.0" y="284.0" text-anchor="end">0.00</text><line x1="142.0" y1="280.0" x2="142.0" y2="284.0" /><text x="142.0" y="296.0" text-anchor="middle">0.25</text><line x1="48.0" y1="214.0" x2="44.0" y2="214.0" /><text x="40.0" y="218.0" text-anchor="end">0.25</text><line x1="236.0" y1="280.0" x2="236.0" y2="284.0" /><text x="236.0" y="296.0" text-anchor="middle">0.50</text><line x1="48.0" y1="148.0" x2="44.0" y2="148.0" /><text x="40.0" y="152.0" text-anchor="end">0.50</text><line x1="330.0" y1="280.0" x2="330.0" y2="284.0" /><text x="330.0" y="296.0" text-anchor="middle">0.75</text><line x1="48.0" y1="82.0" x2="44.0" y2="82.0" /><text x="40.0" y="86.0" text-anchor="end">0.75</text><line x1="424.0" y1="280.0" x2="424.0" y2="284.0" /><text x="424.0" y="296.0" text-anchor="middle">1.00</text><line x1="48.0" y1="16.0" x2="44.0" y2="16.0" /><text x="40.0" y="20.0" text-anchor="end">1.00</text>
+    <text x="236.0" y="314" text-anchor="middle">predicted confidence</text>
+    <text transform="translate(14 148.0) rotate(-90)" text-anchor="middle">actual accuracy</text>
+    
+        <line x1="48.0" y1="280.0" x2="424.0" y2="16.0" class="diag" /><circle cx="68.2" cy="148.0" r="4.4" class="dot"><title>[0.00,0.10] n=4 conf=0.054 acc=0.500</title></circle><circle cx="90.3" cy="16.0" r="4.2" class="dot"><title>[0.10,0.20] n=1 conf=0.112 acc=1.000</title></circle><circle cx="215.6" cy="148.0" r="5.7" class="dot"><title>[0.40,0.50] n=70 conf=0.446 acc=0.500</title></circle><circle cx="252.8" cy="104.0" r="4.4" class="dot"><title>[0.50,0.60] n=3 conf=0.545 acc=0.667</title></circle><circle cx="289.2" cy="115.2" r="6.5" class="dot"><title>[0.60,0.70] n=149 conf=0.641 acc=0.624</title></circle><circle cx="328.7" cy="89.9" r="6.5" class="dot"><title>[0.70,0.80] n=150 conf=0.747 acc=0.720</title></circle><circle cx="359.5" cy="63.5" r="7.2" class="dot"><title>[0.80,0.90] n=250 conf=0.828 acc=0.820</title></circle><circle cx="416.7" cy="23.3" r="12.0" class="dot"><title>[0.90,1.00] n=1526 conf=0.981 acc=0.972</title></circle>
+      </svg>
+      <p class="hint">Dot size ∝ bin count. On the diagonal, confidence matches accuracy.</p>
+    </figure>
+    
+    <figure>
       <figcaption>Risk–coverage (test, empirical)</figcaption>
       <svg viewBox="0 0 440 320" role="img" aria-label="Risk–coverage (test, empirical)">
         
@@ -110,10 +126,10 @@
         <h2>Empirical thresholds on test</h2>
         <table>
           <thead><tr><th>Condition</th><th>Target</th><th>Thr (cal)</th><th>Coverage</th><th>Sel. risk</th><th>Accepted</th></tr></thead>
-          <tbody><tr><td>raw</td><td>1%</td><td>0.680</td><td>52.0%</td><td>0.0107</td><td>1120/2153</td></tr><tr><td>raw</td><td>5%</td><td>0.500</td><td>69.8%</td><td>0.0253</td><td>1502/2153</td></tr><tr><td>raw</td><td>10%</td><td>0.500</td><td>69.8%</td><td>0.0253</td><td>1502/2153</td></tr><tr><td>temperature_scaled</td><td>1%</td><td>0.910</td><td>73.3%</td><td>0.0165</td><td>1578/2153</td></tr><tr><td>temperature_scaled</td><td>5%</td><td>0.570</td><td>91.8%</td><td>0.0683</td><td>1977/2153</td></tr><tr><td>temperature_scaled</td><td>10%</td><td>0.500</td><td>94.4%</td><td>0.0768</td><td>2032/2153</td></tr></tbody>
+          <tbody><tr><td>raw</td><td>1%</td><td>0.680</td><td>52.0%</td><td>0.0107</td><td>1120/2153</td></tr><tr><td>raw</td><td>5%</td><td>0.500</td><td>69.8%</td><td>0.0253</td><td>1502/2153</td></tr><tr><td>raw</td><td>10%</td><td>0.500</td><td>69.8%</td><td>0.0253</td><td>1502/2153</td></tr><tr><td>temperature_scaled</td><td>1%</td><td>0.910</td><td>73.3%</td><td>0.0165</td><td>1578/2153</td></tr><tr><td>temperature_scaled</td><td>5%</td><td>0.570</td><td>91.8%</td><td>0.0683</td><td>1977/2153</td></tr><tr><td>temperature_scaled</td><td>10%</td><td>0.500</td><td>94.4%</td><td>0.0768</td><td>2032/2153</td></tr><tr><td>isotonic</td><td>1%</td><td>0.970</td><td>48.8%</td><td>0.0095</td><td>1051/2153</td></tr><tr><td>isotonic</td><td>5%</td><td>0.750</td><td>82.8%</td><td>0.0499</td><td>1782/2153</td></tr><tr><td>isotonic</td><td>10%</td><td>0.500</td><td>96.5%</td><td>0.0895</td><td>2078/2153</td></tr></tbody>
         </table>
         <h2>Notes</h2>
-        <ul class="notes"><li>ECE improved by 92% after temperature scaling.</li><li>@1% risk coverage=73.3% sits in a usable automation band.</li></ul>
+        <ul class="notes"><li>Certified at 5%: 91.5% of test traffic auto-accepted (&gt;= 30%).</li><li>Context: temperature scaling changed ECE 0.256 -&gt; 0.021 (+92% drop). Not used in the verdict.</li></ul>
         
 </body>
 </html>

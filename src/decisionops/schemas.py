@@ -133,15 +133,38 @@ class ConditionResult(BaseModel):
 
 
 class GateVerdict(BaseModel):
-    """Lightweight Go / Watch / No-Go signals for the technical gate."""
+    """
+    Go / Watch / No-Go for the technical gate, decided by a CRC certificate.
 
-    ece_improved: bool
+    - no-go: no certified threshold at `verdict_alpha`
+    - watch: certified, but test coverage below `min_coverage`
+    - go:    certified and test coverage >= `min_coverage`
+
+    ECE and empirical coverage are reported for context only; they do not pick
+    the verdict. Good calibration does not mean safe automation (findings §3).
+    """
+
+    recommendation: str  # "go" | "watch" | "no-go"
+    verdict_alpha: float = 0.05
+    """Target joint automated error rate the verdict is certified at."""
+
+    min_coverage: float = 0.30
+    """Certified test coverage needed for `go`. A policy choice, not theory."""
+
+    certified_feasible: bool = False
+    certified_threshold: float | None = None
+    certified_coverage: float | None = None
+    """Share of test traffic auto-accepted at the certified threshold."""
+
+    certified_joint_error: float | None = None
+    # Context only — not used in the decision.
+    ece_improved: bool = False
     ece_relative_drop: float | None = None
     coverage_at_1pct: float | None = None
     coverage_at_5pct: float | None = None
-    coverage_in_band_1pct: bool | None = None
+    """Empirical (not certified) coverage at 1% / 5%, focus condition."""
+
     notes: list[str] = Field(default_factory=list)
-    recommendation: str  # "go" | "watch" | "no-go"
 
 
 class GateReport(BaseModel):

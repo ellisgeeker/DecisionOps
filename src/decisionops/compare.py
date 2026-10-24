@@ -126,6 +126,7 @@ def compare_models(
             target_risks=target_risks,
             calibrate=calibrate,
             contract=contract,
+            temp_ratio=temp_ratio,
         )
         cert = run_certification(
             cases,
