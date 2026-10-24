@@ -68,7 +68,8 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Weighted-loss CRC (`contract.severity`) | done |
 | v0.1.0 release | done |
 | Feedback format + `recertify` from audit rows | done |
-| Label-free drift monitor | next (0.1.x) |
+| Label-free drift monitor | done |
+| Shadow-mode guide | next (0.1.x) |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
@@ -120,6 +121,13 @@ decisionops recertify profile.json --decisions decisions.jsonl \
 ```
 
 Or in Python: `dops.run_recertification(profile, decisions=..., outcomes=..., predictions=...)`.
+
+Between recertifications, compare a live decisions window to a baseline (no labels):
+
+```bash
+decisionops drift live.jsonl --baseline baseline.jsonl --profile profile.json
+```
+
 
 `gate` prints raw vs temperature-scaled **test** metrics, coverage at target risks with thresholds fit on **calibration only**, and a verdict (`go` / `watch` / `no-go`) decided by a CRC certificate: `no-go` when nothing certifies at `--verdict-alpha` (default 5%), `watch` when it certifies but automates less than `--min-coverage` (default 30%) of test traffic, else `go`. ECE is shown for context and never decides the verdict; the 30% bar is a policy choice to tune to your cost of escalation. `--output` writes `gate_report.json` and a self-contained `gate_report.html` with the reliability diagram and risk-coverage curve (no CDN).
 

@@ -1,4 +1,4 @@
-"""CLI entrypoint: decisionops eval | gate | compare | certify | cascade | decide | recertify ..."""
+"""CLI entrypoint: eval | gate | compare | certify | cascade | decide | recertify | drift."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from decisionops.decide import (
     profile_from_report,
     save_profile,
 )
+from decisionops.drift import run_drift_monitor
 from decisionops.eval import evaluate, run_gate
 from decisionops.io import (
     load_dataset,
@@ -36,6 +37,7 @@ from decisionops.report import (
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
+    print_drift_report,
     print_eval_report,
     print_gate_report,
     print_recertify_report,
@@ -1153,6 +1155,89 @@ def recertify_cmd(
             f"profile={report.profile.profile_hash})"
         )
     elif report.verdict == "infeasible":
+        raise typer.Exit(code=1)
+
+
+
+
+@app.command("drift")
+def drift_cmd(
+    live: Annotated[
+        Path,
+        typer.Argument(
+            help="Live decisions JSONL from `decisionops decide -o`.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    baseline: Annotated[
+        Path,
+        typer.Option(
+            "--baseline",
+            help="Baseline decisions JSONL from the same profile (reference window).",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    profile: Annotated[
+        Path | None,
+        typer.Option(
+            "--profile",
+            help="Optional CertificationProfile for hash/coverage context.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    min_window: Annotated[
+        int,
+        typer.Option("--min-window", help="Minimum decisions per window."),
+    ] = 30,
+    bins: Annotated[
+        int,
+        typer.Option("--bins", help="Equal-width bins for confidence PSI."),
+    ] = 10,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write DriftReport JSON."),
+    ] = None,
+) -> None:
+    """
+    Label-free drift monitor: compare live decide() behaviour to a baseline.
+
+    Watches certified rate (reason in {certified, audit}) and confidence
+    distribution (PSI + KS). A shift suggests raising audit_rate or running
+    recertify — it is not itself a certificate. Exit 2 on recertify_suggested,
+    1 on watch, 0 on ok.
+    """
+    if min_window < 2:
+        raise typer.BadParameter("--min-window must be >= 2")
+    if bins < 2:
+        raise typer.BadParameter("--bins must be >= 2")
+    try:
+        frozen = load_profile(profile) if profile is not None else None
+        report = run_drift_monitor(
+            load_decisions(live),
+            load_decisions(baseline),
+            profile=frozen,
+            n_bins=bins,
+            min_window=min_window,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    print_drift_report(report, console=console)
+
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Wrote[/green] {output}")
+
+    if report.verdict == "recertify_suggested":
+        raise typer.Exit(code=2)
+    if report.verdict == "watch":
         raise typer.Exit(code=1)
 
 

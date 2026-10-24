@@ -8,7 +8,9 @@
 - `decisionops recertify` — CRC on `audit=True` rows only; diffs against the live
   profile; optional `--as-of` / `--since` maturity window; writes a replacement
   profile with `split.protocol=audit_recertify`.
-- Library: `run_recertification`, `load_outcomes`, `load_decisions`.
+- `decisionops drift` — label-free monitor of certified rate and confidence
+  (PSI + KS) vs a baseline decisions window; exit 0/1/2 for ok/watch/recertify_suggested.
+- Library: `run_recertification`, `run_drift_monitor`, `load_outcomes`, `load_decisions`.
 
 ## 0.1.0 — 2026-10-24
 
@@ -49,7 +51,7 @@ generic HTTP (never sends the gold label; refuses redirects).
 
 ### Known limits
 
-- No label-free drift monitor or shadow-mode guide yet (0.1.x).
+- No shadow-mode guide yet (0.1.x).
 - Conditional (selective) risk and cascade thresholds are not certified.
 - Ordinal (Score) questions are not supported.
 - Validated on public benchmarks only (BANKING77, CLINC OOS), not production traffic.

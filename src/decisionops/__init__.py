@@ -19,6 +19,7 @@ from decisionops.decide import (
     profile_from_report,
     save_profile,
 )
+from decisionops.drift import DriftReport, run_drift_monitor
 from decisionops.eval import evaluate, run_gate
 from decisionops.io import (
     align_cases_and_predictions,
@@ -49,6 +50,7 @@ __all__ = [
     "GateReport",
     "OutcomeFeedback",
     "ProfileMismatchError",
+    "DriftReport",
     "RecertifyReport",
     "__version__",
     "align_cases_and_predictions",
@@ -64,6 +66,7 @@ __all__ = [
     "load_profile",
     "profile_from_report",
     "run_cascade",
+    "run_drift_monitor",
     "run_certification",
     "run_gate",
     "run_recertification",

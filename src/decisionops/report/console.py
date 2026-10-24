@@ -584,3 +584,46 @@ def print_recertify_report(report, console: Console | None = None) -> None:
     for note in report.notes:
         console.print(f"• {escape(note)}")
 
+
+def print_drift_report(report, console: Console | None = None) -> None:
+    """Print a label-free drift monitor summary."""
+    console = console or Console()
+    console.print()
+    console.rule("[bold]DecisionOps Drift[/bold]")
+    color = {
+        "ok": "green",
+        "watch": "yellow",
+        "recertify_suggested": "red",
+    }.get(report.verdict, "white")
+    console.print(
+        f"verdict=[{color} bold]{report.verdict}[/{color} bold]  "
+        + (f"profile={report.profile_hash}  " if report.profile_hash else "")
+        + f"n_baseline={report.baseline.n}  n_live={report.live.n}"
+    )
+    b, live = report.baseline, report.live
+    console.print(
+        f"certified_rate: baseline={b.certified_rate:.1%}  live={live.certified_rate:.1%}  "
+        f"delta={report.delta_certified_rate:+.1%}"
+    )
+    console.print(
+        f"auto_rate:      baseline={b.auto_rate:.1%}  live={live.auto_rate:.1%}  "
+        f"delta={report.delta_auto_rate:+.1%}"
+    )
+    conf_bits = []
+    if report.psi_confidence is not None:
+        conf_bits.append(f"PSI={report.psi_confidence:.3f}")
+    if report.ks_pvalue is not None:
+        conf_bits.append(f"KS p={report.ks_pvalue:.4g}")
+    if conf_bits:
+        console.print(
+            "confidence: "
+            + "  ".join(conf_bits)
+            + f"  (live mean={live.mean_confidence:.3f}, baseline mean={b.mean_confidence:.3f})"
+        )
+    if report.expected_certified_rate is not None:
+        console.print(
+            f"profile coverage_calibration={report.expected_certified_rate:.1%} (context)"
+        )
+    for note in report.notes:
+        console.print(f"• {escape(note)}")
+

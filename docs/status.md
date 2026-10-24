@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-24 (feedback format + `recertify` done; next is drift monitor / remote push)
+**Last updated:** 2026-10-24 (drift monitor done; next is shadow-mode guide / remote push)
 **Version:** 0.1.0 (tagged locally 2026-10-24; no remote yet, not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,8 +16,22 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: label-free drift monitor (0.1.x), then remote push when the GitHub
-repo is chosen.** PyPI is undecided.
+**Next: shadow-mode guide (docs), then remote push when the GitHub repo is
+chosen.** PyPI is undecided. Label loop core (audit → drift → recertify) is in
+place.
+
+Done 2026-10-24 — label-free drift monitor (0.1.x):
+
+- `run_drift_monitor(live, baseline, profile=…)` compares two `decide()`
+  windows without labels. Metrics: certified rate (`reason in {certified,
+  audit}`, audit-invariant and comparable to coverage_calibration), auto
+  rate, confidence PSI (equal-width bins) and two-sample KS.
+- Verdicts: `ok` / `watch` / `recertify_suggested` with fixed policy bands
+  (rate 5%/10%, PSI 0.10/0.25, KS p 0.05/0.01). A shift is an alarm, not a
+  certificate.
+- CLI: `decisionops drift LIVE --baseline BASE [--profile P]`; exit 0/1/2.
+- Tests: PSI sanity, matched windows stay ok, confidence shift alerts, CLI
+  exit codes.
 
 Done 2026-10-24 — outcome feedback + `recertify` (0.1.x):
 
@@ -52,6 +66,7 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 3. ~~v0.1.0 release~~ — done locally 2026-10-24.
 4. ~~Feedback format + `recertify` from audit rows only~~ — done 2026-10-24
    (drift simulation in `tests/test_recertify.py`).
+4b. ~~Label-free drift monitor~~ — done 2026-10-24 (`decisionops drift`).
 5. Certified conditional (selective) risk via Learn-Then-Test; certified
    cascade thresholds (today the cascade curve is empirical, two-stage,
    oracle-priced).
@@ -235,11 +250,10 @@ is dropped from the roadmap.
   data at α=1%. Revisit the default only if a customer needs it for audit.
 - **Risk is asymmetric.** Only errors on the automatic (cheap) path are risk.
   Escalating a case that did not need it costs money, not safety.
-- **Certificates are recertified on unbiased live samples (planned, not yet
-  built).** Each recertification uses a random sample of live traffic, so the
-  guarantee keeps holding as traffic changes. Organic escalations are
-  selected by low confidence and are not used directly as a calibration set.
-  Mechanism and open problems: *Label strategy*.
+- **Certificates are recertified on unbiased live samples.** `decide` draws
+  the audit sample; `recertify` rebuilds CRC on matured audit labels; `drift`
+  watches behaviour between recertifications without labels. Organic
+  escalations stay out of the calibration set. Open problems: *Label strategy*.
 - **Code review is one showcase scenario, not the product.** Example: does this
   diff need a deep LLM review? The same contract describes ticket triage, risk
   review, and agent tool-call confirmation. Scenario specifics live in
@@ -284,7 +298,7 @@ is dropped from the roadmap.
     2. ~~**Weighted-loss CRC**~~ — done 2026-10-23 (`contract.severity`).
     3. ~~**v0.1.0 release**~~ — done locally 2026-10-24; remote repo pending.
     4. **0.1.x: closing the label loop** — ~~outcome feedback + `recertify`~~
-       done 2026-10-24; remaining: label-free drift monitor, shadow-mode guide.
+       and ~~drift monitor~~ done 2026-10-24; remaining: shadow-mode guide.
        See *Label strategy*.
     The #7/#9/#10 bundle is the public demo after the release.
 
@@ -345,7 +359,7 @@ Work items:
 | ~~Audit sampling in `decide()`~~ | done 2026-10-23: `audit_rate` / `audit_seed` in the profile, `Decision.audit` | before v0.1 |
 | ~~Outcome feedback format~~ | done 2026-10-24: `OutcomeFeedback`, `load_outcomes` | 0.1.x |
 | ~~`decisionops recertify`~~ | done 2026-10-24: audit-only CRC, profile diff | 0.1.x |
-| Drift monitor | automation rate + confidence-distribution shift, no labels | 0.1.x |
+| ~~Drift monitor~~ | done 2026-10-24: `decisionops drift`, PSI + KS | 0.1.x |
 | Shadow-mode guide | how to collect the first labels before go-live | docs, 0.1.x |
 
 ---
@@ -436,7 +450,7 @@ in tree.
 
 ### Validation performed
 
-- **167 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **174 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).
