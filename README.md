@@ -4,7 +4,7 @@
 >
 > DecisionOps tells you when an AI decision is safe enough to automate.
 
-Open-source reliability toolkit for **decision models** (routing, triage, choice heads, System-One style models): calibration, selective prediction, and risk-coverage — before you put a confidence threshold into production.
+Open-source reliability toolkit for **decision models** (routing, triage, choice heads, System-One style models). Before go-live it measures calibration and certifies a confidence threshold; after go-live it routes each decision with that certificate, samples an unbiased audit set, watches for drift, and recertifies from audit labels.
 
 **Where it sits.** DecisionOps certifies the *decision* layer, not the execution layer. A cheap decision model (Jev, Laya, your own head) picks from a closed set of actions with probabilities; DecisionOps tells you when that choice can run automatically and when to escalate to the slow, expensive path — a deep LLM call (Claude, Qwen, DeepSeek) or a human. The certified claim: *at an expected miss rate ≤ α, this many expensive calls are saved.* By default that bound holds on average over calibration draws (Conformal Risk Control), so any single certificate can land slightly above α. For a per-certificate guarantee, `certify --confidence-level 0.95` gives *miss rate ≤ α with 95% confidence*, at the cost of lower coverage and more calibration data.
 
@@ -38,7 +38,7 @@ Vendor-supplied calibration is a starting point, not a reliability guarantee. Th
 
 **3. Good calibration does not mean safe automation.** After fitting temperature, Laya reached ECE **0.056** — close to a sklearn baseline's 0.034. Across 40 splits of the same BANKING77 pool, a 1% CRC certificate was **infeasible on 34/40**; when a threshold existed it covered ~2% of traffic. ECE and coverage are independent axes; a calibration library only shows you the first.
 
-**4. Empirically-tuned thresholds rebound on held-out data.** Picking the threshold that hits 1% error on a calibration split is selecting for downward noise. On BANKING77 at a 1% target, **all five models exceeded it on test**. `compare` still prints those figures with `!`, but **ranks on CRC certificates** — infeasible models are excluded rather than reported as meeting the target.
+**4. Empirically-tuned thresholds rebound on held-out data.** Picking the threshold that hits 1% error on a calibration split is selecting for downward noise. On BANKING77 at a 1% target, **four of five models exceeded it on test**; the fifth held only by automating about 3% of traffic. `compare` still prints those figures with `!`, but **ranks on CRC certificates** — infeasible models are excluded rather than reported as meeting the target.
 
 Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[loss] ≤ α` — an average over calibration draws, not a bound on each certificate (see [In expectation vs with high probability](#in-expectation-vs-with-high-probability)). Validated against a closed-form optimum on a synthetic pool where the true threshold is known — `λ̂` sat above `λ*` in all six configurations (z = +0.45 to +3.60), so the rule is conservative as the theory requires.
 
@@ -67,9 +67,9 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | High-probability certificates (`certify --confidence-level`) | done |
 | Weighted-loss CRC (`contract.severity`) | done |
 | v0.1.0 release | done |
-| Feedback format + `recertify` from audit rows | done |
-| Label-free drift monitor | done |
-| Shadow-mode guide | done |
+| Feedback format + `recertify` from audit rows | done on `main`, unreleased |
+| Label-free drift monitor (`drift`) | done on `main`, unreleased |
+| Shadow-mode guide | done on `main`, unreleased |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
@@ -85,7 +85,7 @@ uv run decisionops gate examples/gate-synthetic/dataset.jsonl \
   --predictions examples/gate-synthetic/predictions.jsonl \
   --output ./report/gate-synthetic
 
-# Plan flagship: live Laya on a labeled dataset (needs `uv sync --extra laya`)
+# Live Laya (local decision model) on a labeled dataset (needs `uv sync --extra laya`)
 uv run decisionops eval examples/toy-routing/dataset.jsonl \
   --provider laya --limit 20 --output ./report/laya-toy
 ```
@@ -197,7 +197,7 @@ uv run decisionops compare examples/banking77/dataset.jsonl \
   --output examples/banking77/compare
 ```
 
-Ranking rule: **most coverage among models whose test selective risk actually held the target.** Models that broke the target are marked `!` and excluded from that ranking, so a high-accuracy but miscalibrated model cannot win by overclaiming.
+Ranking rule: **most certified test coverage among models with a feasible CRC certificate.** A model with no certificate at a given α is excluded from that ranking, so a high-accuracy but miscalibrated model cannot win by overclaiming. Empirical thresholds are shown in a second table, marked `!` where they rebound on test; that table never picks the winner.
 
 ## Laya provider (local System-One model)
 
@@ -369,7 +369,7 @@ uv run decisionops certify examples/banking77/dataset.jsonl \
    never fit on the data CRC calibrates against)
 2. Certify `λ̂` per target `α` on the CRC set
 3. Measure coverage and joint error on **test only**
-4. Write `certification_report.json`
+4. With `--output`, write `certification_report.json` and `certification_report.html`
 
 ### In expectation vs with high probability
 
@@ -394,6 +394,21 @@ traffic auto-accepted *and* wrong — bounded by `α` in expectation. Not the
 conditional selective risk `gate` reports. Levels where the calibration set is too
 small (`α ≥ B/(n+1)` fails) or where no threshold holds `α` are reported
 **INFEASIBLE** rather than given a number.
+
+## Cascade (cost simulation)
+
+How much does automation save, at what miss rate? `cascade` sweeps thresholds on the
+held-out split and reports cost saved against always escalating. It needs a contract
+with a cost for every choice:
+
+```bash
+uv run decisionops cascade data.jsonl -p preds.jsonl \
+  --contract examples/contracts/routing.json --output report/cascade
+```
+
+The curve is **empirical** and escalation is priced with an oracle (the true escalate
+label's cost, else the cheapest escalate choice), so savings are optimistic. Pair it
+with `certify` for a CRC bound on the miss rate.
 
 ## Comparison protocol
 
