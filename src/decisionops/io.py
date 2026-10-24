@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from decisionops.schemas import DecisionCase, DecisionPrediction
+from decisionops.schemas import DecisionCase, DecisionPrediction, OutcomeFeedback
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -38,6 +38,25 @@ def load_predictions(path: str | Path) -> list[DecisionPrediction]:
     if not raw:
         raise ValueError(f"Predictions file is empty: {path}")
     return [DecisionPrediction.model_validate(row) for row in raw]
+
+
+def load_decisions(path: str | Path):
+    """Load runtime Decision rows (e.g. from `decisionops decide -o`)."""
+    # Local import: decide -> conformal -> io, so Decision cannot be top-level here.
+    from decisionops.decide import Decision
+
+    raw = _read_jsonl(Path(path))
+    if not raw:
+        raise ValueError(f"Decisions file is empty: {path}")
+    return [Decision.model_validate(row) for row in raw]
+
+
+def load_outcomes(path: str | Path) -> list[OutcomeFeedback]:
+    """Load post-hoc outcome labels for recertification."""
+    raw = _read_jsonl(Path(path))
+    if not raw:
+        raise ValueError(f"Outcomes file is empty: {path}")
+    return [OutcomeFeedback.model_validate(row) for row in raw]
 
 
 def align_cases_and_predictions(

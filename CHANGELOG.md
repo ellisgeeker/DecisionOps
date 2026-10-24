@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Outcome feedback JSONL (`OutcomeFeedback`: id, label, label_source, matured_at).
+- `decisionops recertify` — CRC on `audit=True` rows only; diffs against the live
+  profile; optional `--as-of` / `--since` maturity window; writes a replacement
+  profile with `split.protocol=audit_recertify`.
+- Library: `run_recertification`, `load_outcomes`, `load_decisions`.
+
 ## 0.1.0 — 2026-10-24
 
 First release. DecisionOps certifies when a cheap decision model's choice can
@@ -39,7 +49,7 @@ generic HTTP (never sends the gold label; refuses redirects).
 
 ### Known limits
 
-- No `recertify` command, feedback format or drift monitor yet (0.1.x).
+- No label-free drift monitor or shadow-mode guide yet (0.1.x).
 - Conditional (selective) risk and cascade thresholds are not certified.
 - Ordinal (Score) questions are not supported.
 - Validated on public benchmarks only (BANKING77, CLINC OOS), not production traffic.

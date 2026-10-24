@@ -231,3 +231,32 @@ class ComparisonReport(BaseModel):
     """Winner per alpha: max certified coverage among feasible CRC certificates."""
     notes: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OutcomeFeedback(BaseModel):
+    """
+    Post-hoc label for one decision, used to close the certification loop.
+
+    Join on `id` with a `Decision` row. Recertify uses only decisions with
+    `audit=True`; organic escalations may be recorded here for diagnostics
+    but must not enter the calibration set unweighted.
+    """
+
+    id: str
+    label: str
+    """Expensive-path or human verdict treated as ground truth for this case."""
+
+    label_source: str = "audit"
+    """
+    Where the label came from: `audit` (random sample), `escalation` (organic),
+    `shadow`, `backfill`, `manual`, or a custom tag. Informational; membership
+    in the recertify set is decided by `Decision.audit`, not this field.
+    """
+
+    matured_at: str | None = None
+    """
+    ISO-8601 time when the label is considered final (e.g. after a revert window).
+    With `--as-of`, only rows with matured_at <= as-of are used.
+    """
+
+    metadata: dict[str, Any] = Field(default_factory=dict)

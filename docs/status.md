@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-24 (v0.1.0 tagged locally, not pushed; next is feedback format + `recertify`)
+**Last updated:** 2026-10-24 (feedback format + `recertify` done; next is drift monitor / remote push)
 **Version:** 0.1.0 (tagged locally 2026-10-24; no remote yet, not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,9 +16,23 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: feedback format + `recertify` from audit rows (0.1.x).** Before
-that, once the user picks a GitHub repo: add the remote and push `main` +
-the `v0.1.0` tag. PyPI is undecided.
+**Next: label-free drift monitor (0.1.x), then remote push when the GitHub
+repo is chosen.** PyPI is undecided.
+
+Done 2026-10-24 — outcome feedback + `recertify` (0.1.x):
+
+- `OutcomeFeedback` schema (`id`, `label`, `label_source`, `matured_at`) and
+  JSONL loaders `load_outcomes` / `load_decisions`.
+- `run_recertification` joins decisions × outcomes × predictions, keeps only
+  `Decision.audit=True` rows (organic escalations ignored), optional
+  `--as-of` / `--since` maturity window, applies the **frozen** profile
+  temperature (never re-fits T on audit mass), runs CRC at the profile alpha.
+- Verdict `replace` / `keep` / `infeasible` with threshold/coverage delta vs
+  the live profile; `--profile-out` writes a child profile tagged
+  `split.protocol=audit_recertify`.
+- CLI: `decisionops recertify PROFILE --decisions … --outcomes … -p …`.
+- Tests: organic labels excluded, maturity filter, matching traffic stays
+  feasible, drifted audit tightens or fails, CLI round trip.
 
 Done 2026-10-24 — v0.1.0 (local):
 
@@ -36,8 +50,8 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 1. ~~Laya builtin-temperature guard~~ — done 2026-10-23.
 2. ~~Weighted-loss CRC~~ — done 2026-10-23, below.
 3. ~~v0.1.0 release~~ — done locally 2026-10-24.
-4. Feedback format + `recertify` from audit rows only; validate with simulated
-   drift on benchmark pools.
+4. ~~Feedback format + `recertify` from audit rows only~~ — done 2026-10-24
+   (drift simulation in `tests/test_recertify.py`).
 5. Certified conditional (selective) risk via Learn-Then-Test; certified
    cascade thresholds (today the cascade curve is empirical, two-stage,
    oracle-priced).
@@ -269,9 +283,9 @@ is dropped from the roadmap.
     1. ~~**Audit sampling in `decide()`**~~ — done 2026-10-23.
     2. ~~**Weighted-loss CRC**~~ — done 2026-10-23 (`contract.severity`).
     3. ~~**v0.1.0 release**~~ — done locally 2026-10-24; remote repo pending.
-    4. **0.1.x: closing the label loop** — outcome feedback format,
-       `recertify` from audit samples only, label-free drift monitor. See
-       *Label strategy*.
+    4. **0.1.x: closing the label loop** — ~~outcome feedback + `recertify`~~
+       done 2026-10-24; remaining: label-free drift monitor, shadow-mode guide.
+       See *Label strategy*.
     The #7/#9/#10 bundle is the public demo after the release.
 
 ## Label strategy (decided 2026-09-27)
@@ -329,8 +343,8 @@ Work items:
 | Item | What | When |
 |---|---|---|
 | ~~Audit sampling in `decide()`~~ | done 2026-10-23: `audit_rate` / `audit_seed` in the profile, `Decision.audit` | before v0.1 |
-| Outcome feedback format | decision id, label, label source, matured-at | 0.1.x |
-| `decisionops recertify` | certify on audit samples only; diff against the current profile | 0.1.x |
+| ~~Outcome feedback format~~ | done 2026-10-24: `OutcomeFeedback`, `load_outcomes` | 0.1.x |
+| ~~`decisionops recertify`~~ | done 2026-10-24: audit-only CRC, profile diff | 0.1.x |
 | Drift monitor | automation rate + confidence-distribution shift, no labels | 0.1.x |
 | Shadow-mode guide | how to collect the first labels before go-live | docs, 0.1.x |
 
@@ -366,6 +380,7 @@ Work items:
 | `decisionops certify` | done — CRC thresholds; `--provider static\|laya\|jev\|http`; `--profile` writes a runtime profile |
 | `decisionops cascade` | done — cost-saved vs miss-rate; requires `--contract` with costs |
 | `decisionops decide` | done — route a predictions JSONL with a profile; offline smoke |
+| `decisionops recertify` | done — audit-only CRC from decisions×outcomes×predictions; profile diff |
 
 Provider-specific flags (`--model-dir`, `--no-builtin-temperature`, `--jev-model`,
 `--jev-base-url`, `--http-url`, `--http-token`) are rejected when combined with a
@@ -421,7 +436,7 @@ in tree.
 
 ### Validation performed
 
-- **160 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **167 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).

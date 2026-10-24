@@ -1,4 +1,4 @@
-"""CLI entrypoint: decisionops eval | gate | compare | certify | cascade | decide ..."""
+"""CLI entrypoint: decisionops eval | gate | compare | certify | cascade | decide | recertify ..."""
 
 from __future__ import annotations
 
@@ -25,13 +25,20 @@ from decisionops.decide import (
     save_profile,
 )
 from decisionops.eval import evaluate, run_gate
-from decisionops.io import load_dataset, load_predictions
+from decisionops.io import (
+    load_dataset,
+    load_decisions,
+    load_outcomes,
+    load_predictions,
+)
+from decisionops.recertify import run_recertification
 from decisionops.report import (
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
     print_eval_report,
     print_gate_report,
+    print_recertify_report,
     write_html_report,
     write_json_report,
 )
@@ -1013,6 +1020,141 @@ def decide_cmd(
         lines = [json.dumps(d.model_dump(mode="json"), ensure_ascii=False) for d in decisions]
         output.write_text("\n".join(lines) + "\n", encoding="utf-8")
         console.print(f"[green]Wrote[/green] {output}")
+
+
+
+@app.command("recertify")
+def recertify_cmd(
+    profile: Annotated[
+        Path,
+        typer.Argument(
+            help="Current CertificationProfile JSON to re-check.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    decisions: Annotated[
+        Path,
+        typer.Option(
+            "--decisions",
+            help="Decisions JSONL from `decisionops decide -o` (needs audit flags).",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    outcomes: Annotated[
+        Path,
+        typer.Option(
+            "--outcomes",
+            help="Outcome feedback JSONL: id, label, optional label_source / matured_at.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    predictions: Annotated[
+        Path,
+        typer.Option(
+            "--predictions",
+            "-p",
+            help="Raw predictions JSONL for the same ids (T is applied from the profile).",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    contract: Annotated[
+        Path | None,
+        typer.Option(
+            "--contract",
+            help="Contract in use now; must match the profile fingerprint.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+    as_of: Annotated[
+        str | None,
+        typer.Option(
+            "--as-of",
+            help="ISO-8601: only outcomes with matured_at <= this time are used.",
+        ),
+    ] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(
+            "--since",
+            help="ISO-8601: drop outcomes matured before this time (rolling window).",
+        ),
+    ] = None,
+    confidence_level: Annotated[
+        float | None,
+        typer.Option(
+            "--confidence-level",
+            help="Override profile guarantee; default keeps the profile's confidence_level.",
+        ),
+    ] = None,
+    profile_out: Annotated[
+        Path | None,
+        typer.Option(
+            "--profile-out",
+            help="Write the new CertificationProfile when the audit certificate is feasible.",
+            dir_okay=False,
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Write RecertifyReport JSON."),
+    ] = None,
+) -> None:
+    """
+    Re-certify a live profile from random audit samples only.
+
+    Joins decisions (audit=True) with outcome labels and raw predictions, applies
+    the frozen temperature, and runs CRC at the profile alpha. Organic escalations
+    are ignored. Writes a replacement profile when feasible and --profile-out is set.
+    """
+    if confidence_level is not None and not 0.0 < confidence_level < 1.0:
+        raise typer.BadParameter("--confidence-level must be in (0, 1)")
+    try:
+        frozen = load_profile(profile)
+        report = run_recertification(
+            frozen,
+            decisions=load_decisions(decisions),
+            outcomes=load_outcomes(outcomes),
+            predictions=load_predictions(predictions),
+            contract=_load_contract_option(contract),
+            as_of=as_of,
+            since=since,
+            confidence_level=confidence_level,
+        )
+    except (ProfileMismatchError, ValueError, FileNotFoundError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    print_recertify_report(report, console=console)
+
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        # Drop the embedded profile from the JSON dump path via write helper shape
+        payload = report.model_dump(mode="json")
+        output.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Wrote[/green] {output}")
+
+    if profile_out is not None:
+        if report.profile is None:
+            console.print(
+                "[red]No profile written:[/red] audit certificate is infeasible."
+            )
+            raise typer.Exit(code=1)
+        path = save_profile(report.profile, profile_out)
+        console.print(
+            f"[green]Wrote[/green] {path}  "
+            f"(verdict={report.verdict}, threshold={report.profile.threshold:.4f}, "
+            f"profile={report.profile.profile_hash})"
+        )
+    elif report.verdict == "infeasible":
+        raise typer.Exit(code=1)
+
 
 
 if __name__ == "__main__":

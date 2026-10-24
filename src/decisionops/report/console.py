@@ -537,3 +537,50 @@ def print_cascade_report(report: CascadeReport, console: Console | None = None) 
     for note in report.notes:
         console.print(f"• {escape(str(note))}")
     console.print()
+
+
+def print_recertify_report(report, console: Console | None = None) -> None:
+    """Print an audit-only recertification diff."""
+    console = console or Console()
+    console.print()
+    console.rule("[bold]DecisionOps Recertify[/bold]")
+    c = report.certificate
+    console.print(
+        f"verdict=[bold]{report.verdict}[/bold]  alpha={report.alpha:g}  "
+        f"n_audit={report.n_audit_calibration}  "
+        f"feasible={'yes' if c.feasible else 'no'}"
+    )
+    join = report.join or {}
+    console.print(
+        f"join: audit_decisions={join.get('n_audit_decisions')}  "
+        f"labeled={join.get('n_audit_labeled')}  "
+        f"unmatured_skipped={join.get('n_skipped_unmatured')}  "
+        f"organic_ignored={join.get('n_organic_labeled_ignored')}"
+    )
+    cur = report.current
+    console.print(
+        f"current: threshold={cur.get('threshold')}  "
+        f"bound={cur.get('crc_bound_value')}  "
+        f"coverage={cur.get('coverage_calibration')}  "
+        f"n_cal={cur.get('n_calibration')}  "
+        f"profile={cur.get('profile_hash')}"
+    )
+    if report.proposed is not None:
+        prop = report.proposed
+        console.print(
+            f"proposed: threshold={prop.get('threshold')}  "
+            f"bound={prop.get('crc_bound_value')}  "
+            f"coverage={prop.get('coverage_calibration')}  "
+            f"n_cal={prop.get('n_calibration')}"
+        )
+        d = report.delta or {}
+        console.print(
+            "delta: "
+            + "  ".join(
+                f"{k}={v:+.4f}" if isinstance(v, float) else f"{k}=—"
+                for k, v in d.items()
+            )
+        )
+    for note in report.notes:
+        console.print(f"• {escape(note)}")
+

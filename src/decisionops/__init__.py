@@ -20,8 +20,21 @@ from decisionops.decide import (
     save_profile,
 )
 from decisionops.eval import evaluate, run_gate
-from decisionops.io import align_cases_and_predictions, load_dataset, load_predictions
-from decisionops.schemas import DecisionCase, DecisionPrediction, EvalResult, GateReport
+from decisionops.io import (
+    align_cases_and_predictions,
+    load_dataset,
+    load_decisions,
+    load_outcomes,
+    load_predictions,
+)
+from decisionops.recertify import RecertifyReport, run_recertification
+from decisionops.schemas import (
+    DecisionCase,
+    DecisionPrediction,
+    EvalResult,
+    GateReport,
+    OutcomeFeedback,
+)
 
 __all__ = [
     "CRCResult",
@@ -34,7 +47,9 @@ __all__ = [
     "DecisionPrediction",
     "EvalResult",
     "GateReport",
+    "OutcomeFeedback",
     "ProfileMismatchError",
+    "RecertifyReport",
     "__version__",
     "align_cases_and_predictions",
     "certify_threshold",
@@ -43,11 +58,14 @@ __all__ = [
     "evaluate",
     "load_contract",
     "load_dataset",
+    "load_decisions",
+    "load_outcomes",
     "load_predictions",
     "load_profile",
     "profile_from_report",
     "run_cascade",
     "run_certification",
     "run_gate",
+    "run_recertification",
     "save_profile",
 ]

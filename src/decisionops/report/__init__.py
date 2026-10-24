@@ -7,19 +7,28 @@ from pathlib import Path
 
 from decisionops.cascade import CascadeReport
 from decisionops.conformal.certify import CertificationReport
+from decisionops.recertify import RecertifyReport
 from decisionops.report.console import (
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
     print_eval_report,
     print_gate_report,
+    print_recertify_report,
 )
 from decisionops.report.html import write_html_report
 from decisionops.schemas import ComparisonReport, EvalResult, GateReport
 
 
 def write_json_report(
-    result: EvalResult | GateReport | ComparisonReport | CertificationReport | CascadeReport,
+    result: (
+        EvalResult
+        | GateReport
+        | ComparisonReport
+        | CertificationReport
+        | CascadeReport
+        | RecertifyReport
+    ),
     path: str | Path,
 ) -> Path:
     out = Path(path)
@@ -35,6 +44,7 @@ __all__ = [
     "print_comparison_report",
     "print_eval_report",
     "print_gate_report",
+    "print_recertify_report",
     "write_html_report",
     "write_json_report",
 ]
