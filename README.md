@@ -42,6 +42,8 @@ Vendor-supplied calibration is a starting point, not a reliability guarantee. Th
 
 Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[loss] ≤ α` — an average over calibration draws, not a bound on each certificate (see [In expectation vs with high probability](#in-expectation-vs-with-high-probability)). Validated against a closed-form optimum on a synthetic pool where the true threshold is known — `λ̂` sat above `λ*` in all six configurations (z = +0.45 to +3.60), so the rule is conservative as the theory requires.
 
+**5. After go-live, only an unbiased audit sample can restore the certificate.** On 200 simulated drifts, the old threshold's true risk roughly doubled (0.049 → 0.095). Recertifying on ~150 random audit labels brought mean risk back to 0.046–0.049. Recertifying on the escalated cases, which are labelled anyway, made it *worse* (0.122): those cases all sit below the old threshold, so the new one comes out looser. And the label-free `drift` monitor said `ok` on 190/200 runs of concept drift, because the scores did not move — only labels reveal a model that got worse at the same confidence. Synthetic pools, closed-form true risk; see [findings §10](docs/findings.md#10-the-label-loop-restores-α-after-drift--on-audit-labels-only).
+
 **Scope.** The Laya numbers are one checkpoint, zero-shot, on one task shape. Its own docs describe it as a fine-tuning base, so low zero-shot accuracy is expected — we did **not** fine-tune, and cannot say how a tuned Laya behaves.
 
 ## Status
@@ -75,7 +77,22 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
 
+## Install
+
+Requires Python 3.12+. Not on PyPI yet; install a tagged release from GitHub:
+
+```bash
+pip install "git+https://github.com/ellisgeeker/DecisionOps.git@v0.1.1"
+
+# with a live provider
+pip install "decisionops[jev] @ git+https://github.com/ellisgeeker/DecisionOps.git@v0.1.1"
+```
+
+Extras: `jev` (TypeSafe SDK), `laya` (torch + transformers, ~1 GB), `bench` (build the public packs).
+
 ## Quickstart
+
+From a clone of the repo:
 
 ```bash
 # requires: Python 3.12+, uv
@@ -360,6 +377,13 @@ held-out data. For thresholds that carry a finite-sample guarantee, use
 
 ## Certification protocol
 
+The BANKING77 files below are gitignored. Build them once (needs `uv sync --extra bench` and network):
+
+```bash
+uv run python scripts/prepare_hf_intent_gates.py --pack banking77
+uv run python scripts/export_multi_providers.py --pack banking77
+```
+
 ```bash
 uv run decisionops certify examples/banking77/dataset.jsonl \
   --predictions examples/banking77/providers/tfidf_char_lr.jsonl \
@@ -414,6 +438,8 @@ label's cost, else the cheapest escalate choice), so savings are optimistic. Pai
 with `certify` for a CRC bound on the miss rate.
 
 ## Comparison protocol
+
+Uses the same BANKING77 files as above; build them first, and run `export_laya_predictions.py` for the `laya` file.
 
 ```bash
 uv run decisionops compare examples/banking77/dataset.jsonl \
