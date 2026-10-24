@@ -377,6 +377,65 @@ The 500-row JSONL is gitignored like the rest of the pack.
 
 ---
 
+## 9. Keep temperature on in `certify`: it is a safety net, not a coverage gain
+
+**Decision (2026-09-27): `certify` keeps `--calibrate` as the default.** Do not
+flip it to off to "save" the 20% of the calibration pool it spends fitting T.
+
+CRC only uses the *ranking* of confidences, not whether 0.9 means 90%. So the
+question is not whether calibration improves ECE (it does, §6) but whether it
+changes certified coverage. Paired A/B through the product path:
+`run_certification(calibrate=True)` vs `calibrate=False`, same seed so same
+test split. With calibration off, the whole non-test pool goes to CRC.
+Certified test coverage, 0 when infeasible; `diff` = off − on; ± is 2 SE.
+
+Multiclass, 20 reshuffles of each fixed pool:
+
+| Model | α | on | off | diff |
+|---|---|--:|--:|--:|
+| Laya, bundled T=0.10 | 5% | 3.1% (12/20 feasible) | **0.0% (0/20)** | −3.1 ± 2.1 |
+| Laya, bundled T=0.10 | 10% | 4.8% (12/20) | **0.0% (0/20)** | −4.8 ± 3.2 |
+| Laya, no bundled T | 5% | 12.7% | 14.1% | +1.4 ± 0.7 |
+| Laya, no bundled T | 10% | 24.7% | 26.5% | +1.8 ± 0.7 |
+| Jev (500) | 5% | 65.4% | 68.4% | +3.0 ± 2.3 |
+| Jev (500) | 10% | 78.1% | 81.6% | +3.5 ± 1.3 |
+| BANKING77 char_lr | 5% | 88.6% | 86.1% | −2.5 ± 0.7 |
+| BANKING77 cnb | 10% | 59.7% | 57.1% | −2.7 ± 0.7 |
+| CLINC char_lr | 5% | 81.9% | 78.3% | −3.6 ± 0.6 |
+
+The other seven multiclass rows (svm_sig, CLINC cnb, and the remaining α) are
+within ±0.8 points. Binary routing (fresh synthetic pools, 30 per row, n=500 and
+2000, calibrated and overconfident): all eight rows within noise, largest
+|diff| 1.2 points with a ±1.5 band.
+
+Why keep it on:
+
+- **The downside is lopsided.** Leaving it on costs at most ~3.5 points. Turning
+  it off makes a certificate *impossible* when raw scores saturate near 1.0:
+  Laya's bundled T=0.10 goes from feasible on 12/20 splits to 0/20. A customer
+  whose own head does this would wrongly conclude it cannot be automated.
+- **The gain from turning it off is small and not consistent.** It helps Jev and
+  un-bundled Laya, hurts the sklearn heads. No simple rule (binary off,
+  multiclass on) holds.
+- **Binary is a wash, not a loss.** Temperature cannot reorder a binary max-prob,
+  and spending 20% of the pool on T did not show up at these sizes.
+
+An earlier session claimed the opposite ("pure loss on binary, turn it off").
+That came from comparing on/off on the *same* 80% slice, which isolates the
+effect of T but never tests the real default change, and from a binary
+argument that was derived, not measured. Measure with this script before
+revisiting.
+
+Limits: binary pools are synthetic; multiclass is two public datasets and eight
+models, reshuffled from fixed pools; only the default `temp_ratio=0.2` was
+tested.
+
+```bash
+uv run python scripts/ab_certify_calibration.py            # ~1 min, offline
+```
+
+---
+
 ## Limits on all of the above
 
 **Laya scope.** One checkpoint, zero-shot, one task shape, 77/151 options. Its
@@ -402,5 +461,17 @@ produced a retracted "validated across 40 seeds" claim earlier. The qualitative
 ordering (sklearn heads automate at 1%; Laya essentially does not) is stable
 across those splits. The point estimates are not portable beyond this pool.
 
-**Verdicts are heuristics.** `go` / `watch` / `no-go` use hand-picked thresholds
-with no theory behind them.
+**Verdicts rest on a certificate plus one policy number.** Since 2026-09-27,
+`gate` decides `go` / `watch` / `no-go` from a CRC certificate at
+`--verdict-alpha` (5%): no certificate → no-go; certified test coverage below
+`--min-coverage` (30%) → watch; otherwise go. Feasibility is certified; the 30%
+bar is a hand-picked policy choice, not theory. The old rule needed an ECE drop
+for `go`, which on BANKING77 gave Laya (certifies nothing) and Jev (67% at 5%)
+the same `watch`. The committed reports under `examples/*/gate*/` were
+regenerated under the new rule on the same inputs.
+
+**One split, one draw.** Each committed gate report is a single seed-42 split.
+BANKING77 char_lr's certified test joint error came out 0.0627, above its 5%
+target. That is expected under CRC (about half of single splits land above α,
+§5) and does not void the certificate; it is also why a per-split `go` is a
+screening signal, not a guarantee on that split.

@@ -6,7 +6,7 @@
 
 Open-source reliability toolkit for **decision models** (routing, triage, choice heads, System-One style models): calibration, selective prediction, and risk-coverage — before you put a confidence threshold into production.
 
-**Where it sits.** DecisionOps certifies the *decision* layer, not the execution layer. A cheap decision model (Jev, Laya, your own head) picks from a closed set of actions with probabilities; DecisionOps tells you when that choice can run automatically and when to escalate to the slow, expensive path — a deep LLM call (Claude, Qwen, DeepSeek) or a human. The certified claim: *at miss rate ≤ α, this many expensive calls are saved.*
+**Where it sits.** DecisionOps certifies the *decision* layer, not the execution layer. A cheap decision model (Jev, Laya, your own head) picks from a closed set of actions with probabilities; DecisionOps tells you when that choice can run automatically and when to escalate to the slow, expensive path — a deep LLM call (Claude, Qwen, DeepSeek) or a human. The certified claim: *at an expected miss rate ≤ α, this many expensive calls are saved.* By default that bound holds on average over calibration draws (Conformal Risk Control), so any single certificate can land slightly above α. For a per-certificate guarantee, `certify --confidence-level 0.95` gives *miss rate ≤ α with 95% confidence*, at the cost of lower coverage and more calibration data.
 
 Scenarios are described by a **decision contract** (`--contract`): the closed choice set, which choices run automatically, and optional per-path costs. Only errors on the automatic path count as risk; escalating a case that did not need it costs money, not safety. Code review ("does this diff need a deep LLM review?") is one example scenario — ticket triage, risk review, and agent tool-call confirmation use the same contract.
 
@@ -39,7 +39,7 @@ Vendor-supplied calibration is a starting point, not a reliability guarantee. Th
 
 **4. Empirically-tuned thresholds rebound on held-out data.** Picking the threshold that hits 1% error on a calibration split is selecting for downward noise. On BANKING77 at a 1% target, **all five models exceeded it on test**. `compare` still prints those figures with `!`, but **ranks on CRC certificates** — infeasible models are excluded rather than reported as meeting the target.
 
-Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[loss] ≤ α`. Validated against a closed-form optimum on a synthetic pool where the true threshold is known — `λ̂` sat above `λ*` in all six configurations (z = +0.45 to +3.60), so the rule is conservative as the theory requires.
+Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[loss] ≤ α` — an average over calibration draws, not a bound on each certificate (see [In expectation vs with high probability](#in-expectation-vs-with-high-probability)). Validated against a closed-form optimum on a synthetic pool where the true threshold is known — `λ̂` sat above `λ*` in all six configurations (z = +0.45 to +3.60), so the rule is conservative as the theory requires.
 
 **Scope.** The Laya numbers are one checkpoint, zero-shot, on one task shape. Its own docs describe it as a fine-tuning base, so low zero-shot accuracy is expected — we did **not** fine-tune, and cannot say how a tuned Laya behaves.
 
@@ -62,9 +62,10 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Decision contract + asymmetric risk (`--contract`) | done |
 | Offline cascade / cost simulation (`cascade`) | done |
 | Certified profile + runtime `decide()` (`certify --profile`, `decide`) | done |
-| Code review example pack | next |
-| Generic HTTP decision provider | later |
-| Thin gate (GitHub Action, then `POST /v1/decision`) | later |
+| Generic HTTP decision provider (`--provider http`) | done |
+| High-probability certificates (`certify --confidence-level`) | done |
+| v0.1.0 release | next |
+| Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
 
@@ -84,7 +85,7 @@ uv run decisionops eval examples/toy-routing/dataset.jsonl \
   --provider laya --limit 20 --output ./report/laya-toy
 ```
 
-`gate` prints raw vs temperature-scaled **test** metrics, coverage at target risks with thresholds fit on **calibration only**, and a heuristic verdict (`go` / `watch` / `no-go`). `--output` writes `gate_report.json` and a self-contained `gate_report.html` with the reliability diagram and risk-coverage curve (no CDN).
+`gate` prints raw vs temperature-scaled **test** metrics, coverage at target risks with thresholds fit on **calibration only**, and a verdict (`go` / `watch` / `no-go`) decided by a CRC certificate: `no-go` when nothing certifies at `--verdict-alpha` (default 5%), `watch` when it certifies but automates less than `--min-coverage` (default 30%) of test traffic, else `go`. ECE is shown for context and never decides the verdict; the 30% bar is a policy choice to tune to your cost of escalation. `--output` writes `gate_report.json` and a self-contained `gate_report.html` with the reliability diagram and risk-coverage curve (no CDN).
 
 ## What problem this solves
 
@@ -268,6 +269,35 @@ A certificate only holds for the input the model saw. Certify with the same desc
 you use in production, give a fine-tuned model the descriptions it was trained with, and
 recertify whenever they change. Reports record them under `metadata.contract`.
 
+## HTTP provider (custom decision head)
+
+Any endpoint that accepts a closed-set case and returns a distribution can be certified
+the same way as Laya or Jev. DecisionOps POSTs one JSON body per case:
+
+```json
+{"id":"case-001","state":"...","question":"...","choices":["refund","reject","review"]}
+```
+
+and never sends `label`. The endpoint replies:
+
+```json
+{"prediction":"refund","probabilities":{"refund":0.91,"reject":0.04,"review":0.05}}
+```
+
+```bash
+export DECISIONOPS_HTTP_TOKEN=...   # optional Bearer token
+
+uv run decisionops eval data.jsonl --provider http \
+  --http-url https://model.example/v1/predict --limit 20
+
+uv run decisionops certify data.jsonl --provider http \
+  --http-url https://model.example/v1/predict --contract contract.json
+```
+
+`--http-token` overrides the env var. Contract `instructions` and per-choice
+`descriptions` are included in the body when present. `compare` stays offline:
+export predictions first, then pass `-p` files as usual.
+
 ## Gate protocol
 
 1. Join dataset ↔ predictions on `id`
@@ -296,6 +326,24 @@ uv run decisionops certify examples/banking77/dataset.jsonl \
 2. Certify `λ̂` per target `α` on the CRC set
 3. Measure coverage and joint error on **test only**
 4. Write `certification_report.json`
+
+### In expectation vs with high probability
+
+By default the bound is CRC's: `E[joint error] ≤ α`, averaged over calibration
+draws. Any one certificate can sit above `α`, and about half do. To bound the
+risk of *this* certificate, pass `--confidence-level`:
+
+```bash
+uv run decisionops certify data.jsonl -p preds.jsonl \
+  --alphas 0.05 --confidence-level 0.95
+```
+
+That switches to a Risk-Controlling Prediction Set with a Clopper-Pearson
+bound: with probability ≥ 95% over the calibration draw, the true joint error
+at `λ̂` is ≤ `α`. The trade-off is stricter thresholds and more data: with
+zero errors it needs `n ≥ ln(δ)/ln(1−α)`, which is 299 samples at α=1% and
+95% confidence (CRC needs 99). Reports and profiles record which guarantee
+was issued.
 
 What is certified is the **joint automated error rate** — the share of *all*
 traffic auto-accepted *and* wrong — bounded by `α` in expectation. Not the

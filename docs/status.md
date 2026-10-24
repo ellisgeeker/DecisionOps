@@ -1,23 +1,80 @@
 # Project status
 
-**Last updated:** 2026-09-27 (`decide()` landed; next is the code review example pack)
+**Last updated:** 2026-10-23 (09-27 work reviewed and committed; next is audit sampling in `decide()`, then v0.1.0)
 **Version:** 0.1.0a1 (unreleased)
 
 Where the project actually is, what to pick up next, and what is known to be
 incomplete. Written so it is usable after a gap of days or weeks.
 
-**Session handoff (2026-09-27):** Roadmap 1–6 done. Live Jev verified. Offline
-cascade and the runtime `decide()` rule are in. Next chat should start at
-roadmap #7 (code review example pack).
+**Session handoff (2026-09-27):** The V1 *library* path is done (roadmap 1–6
+and 8: contract, cascade, `decide()`, Jev, HTTP). The thin gate (GitHub
+Action + `POST /v1/decision`), execution-layer LLMs, and the code review
+example pack are one *production/showcase* bundle — they share the PR-routing
+story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ---
 
 ## Pick up here tomorrow
 
-**Next: roadmap #7 — code review example pack.** Small synthetic data, a
-labelling guide (ground truth from human-confirmed deep-review findings,
-reverts, incidents), and one end-to-end run: `certify --profile` → `cascade`
-→ `decide`, using `examples/contracts/routing.json` as the starting contract.
+**Next: roadmap #11.1 — audit sampling in `decide()`**, then the v0.1.0
+release (#11.2). The label strategy it serves is under *Label strategy*
+below; the rest of that loop (feedback format, `recertify`, drift monitor)
+is 0.1.x.
+
+Done 2026-10-23 — pre-commit review of the 09-27 work, two fixes:
+
+- `DecisionPrediction` rejects NaN / inf probabilities. `json.loads` accepts
+  `NaN`, which passed the non-negative check and made confidence NaN, so a
+  bad HTTP / JSONL row silently escalated instead of failing.
+- HTTP provider refuses redirects. urllib turns a 302 on POST into a GET and
+  copies all headers, so the Bearer token would follow `Location` to any host.
+
+Done 2026-09-27 — `gate` verdict now comes from a certificate:
+
+- `run_gate` runs `run_certification` at `--verdict-alpha` (5%) with the same
+  seed / cal_ratio / temp_ratio / contract as `certify`, so both agree. no-go
+  = infeasible, watch = certified coverage < `--min-coverage` (30%), go
+  otherwise. ECE is context only. Tiny pools that cannot split → no-go.
+- BANKING77 now: svm_sig / char_lr / cnb / Jev → go (90.5 / 91.5 / 45.1 /
+  67.1% certified), Laya → no-go. Old rule gave Laya and Jev both `watch`.
+- `GateVerdict` dropped `coverage_in_band_1pct` (the 15–75% band) and gained
+  `certified_*`, `verdict_alpha`, `min_coverage`.
+- Committed gate reports under `examples/` regenerated with the same inputs
+  and seed 42 (temperatures match the old reports to 1e-9), now with HTML:
+  BANKING77 char_lr go (91.5%), Laya no-go (was watch), Laya raw-T 800 watch
+  (10.2%), CLINC word_lr go (76.7%, was watch). `gate-laya_rawT` is the seed-42
+  800-row subset from `export_laya_predictions._subsample`; the JSONL on disk is
+  now the full 3076-row export.
+- `certify` keeps temperature on by default; measured in
+  [findings.md](findings.md) §9.
+
+Done 2026-09-27 — `confidence_level` (high-probability certificates):
+
+- `certify_threshold(..., confidence_level=0.95)` / `certify
+  --confidence-level 0.95` issue an RCPS certificate with a Clopper-Pearson
+  bound: P(true joint error ≤ α) ≥ 0.95 over the calibration draw. Default
+  (`None`) is unchanged CRC, which bounds only E[loss].
+- Fixed-sequence scan from the strictest λ down, so no multiplicity
+  correction. 0-1 loss only (`loss_bound` must be 1). Zero-error sample
+  floor is `ln(δ)/ln(1−α)`: 299 at α=1%, 95% (CRC: 99).
+- `CRCResult`, report metadata and `CertificationProfile` carry
+  `guarantee` + `confidence_level`; console / HTML / `decide` output say
+  which guarantee was issued.
+- Measured on 300 fresh calibrated pools (n_cal=300, α=5%), rate of
+  certificates whose true risk exceeds α: HP 0.140 at δ=0.20, 0.030 at
+  δ=0.05; plain CRC 0.417. Regression test:
+  `tests/test_crc_high_probability.py::test_hp_violation_rate_is_at_most_delta`.
+- `scipy` added to `dependencies` (it was imported directly but only present
+  via scikit-learn). CI now installs `--extra jev`: without it the Jev adapter
+  tests skip and coverage was 84.2%, under the 85% gate.
+
+Do **not** start the thin gate or the code review pack next. The original
+plan said the first version is Eval, not a Gateway. The GitHub Action is
+the code-review integration (run `decide` on a PR); `POST /v1/decision`
+is the same runtime in HTTP form. Both belong with the showcase (#7) and
+execution-layer LLMs (#9) *after* the library is released, so the demo
+can run `certify → cascade → decide → gate` for real. Starting contract
+when that bundle starts: `examples/contracts/routing.json`.
 
 Just finished — roadmap #6, certified profile + `decide()` (`src/decisionops/decide.py`):
 
@@ -70,10 +127,21 @@ is dropped from the roadmap.
   sit *behind* it as expensive executors, called only on escalation. Their
   chat-style confidence is not what gets calibrated.
 - **The core question is routing:** "is this case worth sending down the slower,
-  more expensive path?" The certified claim is: at miss rate ≤ α, this many
-  expensive calls are saved.
+  more expensive path?" The certified claim is: at an *expected* miss rate
+  ≤ α, this many expensive calls are saved.
+- **Default guarantee is CRC, in expectation (decided 2026-09-27).** Measured
+  on 300 fresh pools (α=5%): mean true risk 4.83%, but 41.7% of individual
+  certificates sit above α (p95 7.0%). Never phrase it as "each certificate
+  ≤ α". `--confidence-level 0.95` is the opt-in per-certificate guarantee
+  (3.0% above α), costing coverage 45.9% → 35.2% and ~3× the calibration
+  data at α=1%. Revisit the default only if a customer needs it for audit.
 - **Risk is asymmetric.** Only errors on the automatic (cheap) path are risk.
   Escalating a case that did not need it costs money, not safety.
+- **Certificates are recertified on unbiased live samples (planned, not yet
+  built).** Each recertification uses a random sample of live traffic, so the
+  guarantee keeps holding as traffic changes. Organic escalations are
+  selected by low confidence and are not used directly as a calibration set.
+  Mechanism and open problems: *Label strategy*.
 - **Code review is one showcase scenario, not the product.** Example: does this
   diff need a deep LLM review? The same contract describes ticket triage, risk
   review, and agent tool-call confirmation. Scenario specifics live in
@@ -97,18 +165,92 @@ is dropped from the roadmap.
    on the held-out split; oracle escalate pricing; contract must supply costs.
 6. ~~**Certified profile + `decide()`**~~ — done 2026-09-27 (`decide.py`,
    `certify --profile`, `decisionops decide`).
-7. **Code review example pack** — small synthetic data, labelling guide (where
-   ground truth comes from: human-confirmed deep-review findings, reverts,
-   incidents), one end-to-end report.
+7. **Code review example pack** — *showcase, with #9/#10, after v0.1.*
+   Small synthetic data, labelling guide (ground truth from human-confirmed
+   deep-review findings, reverts, incidents), one end-to-end report. Not a
+   stand-in for missing library work.
 8. **Decision-backend adapters** — ~~TypeSafe Jev~~ done (`--provider jev`,
    Choice + Noul; live-verified 2026-09-27, including a 500-case BANKING77
-   compare). Next: a generic HTTP provider for customers' own heads. Offline
-   JSONL already works for any model.
-9. **Execution-layer LLMs** (Claude / Qwen / DeepSeek) — escalation targets in
-   cascade / gateway only, never the calibration target.
-10. **Thin gate** — GitHub Action first, then a gateway (`POST /v1/decision`).
-11. **Wrap-up** — v0.1.0 release, CRC `confidence_level` API, outcome feedback,
-    drift, recertification.
+   compare). ~~Generic HTTP provider~~ done (`--provider http`, stdlib
+   `urllib`, gold `label` never sent). Offline JSONL already works for any
+   model.
+9. **Execution-layer LLMs** (Claude / Qwen / DeepSeek) — escalation targets
+   in the showcase gate only, never the calibration target. Same bundle as
+   #7/#10.
+10. **Thin gate** — *same bundle as #7, after v0.1.* GitHub Action (PR
+    routing — this *is* the code-review integration) then
+    `POST /v1/decision`. V1 is the CLI; the original plan deferred Gateway.
+11. **Wrap-up** — **next.** ~~CRC `confidence_level` API~~ done
+    2026-09-27. Remaining, in order:
+    1. **Audit sampling in `decide()`** — before v0.1, see *Label strategy*
+       below. Small, and it decides whether any later feedback data is usable.
+    2. **v0.1.0 release** — commit, remote repo, top-level public API
+       (`decide`, `run_certification`, `load_profile`, …), delete dead
+       `report/json_report.py`, bump `0.1.0a1` → `0.1.0`, changelog, tag.
+    3. **0.1.x: closing the label loop** — outcome feedback format,
+       `recertify` from audit samples only, label-free drift monitor. See
+       *Label strategy*.
+    The #7/#9/#10 bundle is the public demo after the release.
+
+## Label strategy (decided 2026-09-27)
+
+A certificate needs labels that are exchangeable with live traffic. That is
+the product's main unsolved risk: once a cheap path is live, auto-accepted
+cases never get the expensive verdict, so organic labels come only from
+escalated (low-confidence) cases — a biased sample. Plan:
+
+- **First certificate: backfill or shadow.** A prospective customer is, by
+  definition, sending everything down the expensive path today, so their
+  history already labels the full distribution without selection bias. No
+  history → **shadow mode**: the decision model scores every case, takes
+  over none, until enough labels exist (CRC ≥ 99 at α=1%; high-probability
+  ≥ 299 at α=1%, 95%).
+- **After go-live: random audit sample.** `decide()` forces ESCALATE on a
+  fixed fraction ε (e.g. 5%) of traffic, chosen at random *independently of
+  the model's score*, with `reason="audit"`. Those cases get the expensive
+  verdict and are exchangeable with live traffic, so they are a valid CRC
+  calibration set as-is — no importance weighting. Cost: ε of the savings
+  (e.g. 60% → ~57%). At 10k cases/month, 5% gives 500 labels/month.
+- **Organic escalations stay out of the calibration set — directly.** They are
+  labelled but selected by low confidence, so mixing them in unweighted biases
+  the certificate. Use them for diagnostics. (They *can* be used with
+  inverse-probability weighting; see open problems.)
+- **Delayed and noisy labels.** Reverts / incidents can arrive weeks later:
+  certify only on cases older than a maturity window. The expensive path's
+  verdict is itself fallible, so a certificate holds *relative to that
+  path's verdict*; say so in contracts and docs. Incidents and reverts are
+  alarms (they reveal only some misses), never an estimate of miss rate.
+- **Label-free drift monitoring** between recertifications: automation rate
+  and confidence distribution shift (PSI / KS). A trigger prompts recertify
+  or a temporary rise in ε.
+
+Open problems (not solved by the plan above):
+
+- **Window vs staleness.** Audit samples accumulate over months. After drift,
+  old samples are no longer exchangeable with current traffic. A short
+  window starves the certificate, a long one certifies the past. Needs a
+  rolling-window rule tied to the drift monitor (drop pre-drift samples on a
+  trigger).
+- **Low-volume customers fill slowly.** At 1k cases/month and ε=5% that is 50
+  labels/month: ~2 months to the CRC floor of 99 (α=1%), ~6 months to the
+  high-probability floor of 299. Options: raise ε, accept longer cycles, or
+  certify at a looser α. The mechanism suits mid/high-volume traffic best.
+- **Using escalations via IPW (later optimisation).** With audit sampling every
+  case's labelling probability is known (1 if escalated, ε if auto-accepted),
+  so inverse-probability weighting can use all labelled cases. Not in v0.1: it
+  inflates the per-case loss bound from 1 to 1/ε, and CRC's `B/(n+1)` term
+  grows with it — at ε=5%, α=1% the minimum calibration size goes from 99 to
+  ~2000. Revisit only if audit-only samples prove too few.
+
+Work items:
+
+| Item | What | When |
+|---|---|---|
+| Audit sampling in `decide()` | ε-random forced ESCALATE, `reason="audit"`, seeded / recorded so it is reproducible, ε stored in the profile | before v0.1 |
+| Outcome feedback format | decision id, label, label source, matured-at | 0.1.x |
+| `decisionops recertify` | certify on audit samples only; diff against the current profile | 0.1.x |
+| Drift monitor | automation rate + confidence-distribution shift, no labels | 0.1.x |
+| Shadow-mode guide | how to collect the first labels before go-live | docs, 0.1.x |
 
 ---
 
@@ -136,15 +278,16 @@ is dropped from the roadmap.
 
 | Command | Status |
 |---|---|
-| `decisionops eval` | done — same-set smoke; `--provider static\|laya\|jev` |
-| `decisionops gate` | done — cal/test split; temperature + isotonic when `--calibrate`; `--provider static\|laya\|jev` |
+| `decisionops eval` | done — same-set smoke; `--provider static\|laya\|jev\|http` |
+| `decisionops gate` | done — cal/test split; temperature + isotonic when `--calibrate`; `--provider static\|laya\|jev\|http` |
 | `decisionops compare` | done — shared split, CRC ranking, empirical table retained with `!`; offline JSONL only |
-| `decisionops certify` | done — CRC thresholds; `--provider static\|laya\|jev`; `--profile` writes a runtime profile |
+| `decisionops certify` | done — CRC thresholds; `--provider static\|laya\|jev\|http`; `--profile` writes a runtime profile |
 | `decisionops cascade` | done — cost-saved vs miss-rate; requires `--contract` with costs |
 | `decisionops decide` | done — route a predictions JSONL with a profile; offline smoke |
 
 Provider-specific flags (`--model-dir`, `--no-builtin-temperature`, `--jev-model`,
-`--jev-base-url`) are rejected when combined with a different `--provider`.
+`--jev-base-url`, `--http-url`, `--http-token`) are rejected when combined with a
+different `--provider`.
 
 ### Providers
 
@@ -153,6 +296,7 @@ Provider-specific flags (`--model-dir`, `--no-builtin-temperature`, `--jev-model
 | Static file | `adapters/base.py` | done — offline predictions, used for CI |
 | Laya | `adapters/laya.py` | done — local inference; `--model-dir` for a fine-tuned checkpoint, `--no-builtin-temperature` |
 | TypeSafe Jev | `adapters/jev.py` | done — hosted Choice + Noul via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. Live-verified 2026-09-27 against `jev-1.13.0` (Choice + Noul). BANKING77 n=500 compare in [findings.md](findings.md) §8 |
+| Generic HTTP | `adapters/http.py` | done — POST `{id,state,question,choices}` (never `label`); `--http-url` required, `--http-token` / `DECISIONOPS_HTTP_TOKEN` optional Bearer; stdlib `urllib` |
 | sklearn heads | `scripts/export_multi_providers.py` | done — 4 heads with deliberately different probability behaviour |
 
 The Laya adapter imports upstream `rl_common.py` from the downloaded snapshot
@@ -195,8 +339,10 @@ in tree.
 
 ### Validation performed
 
-- **108 tests passing** (1 live Jev smoke skipped without a key), 91% coverage,
-  ruff clean.
+- **141 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+  without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
+  ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
+  which CI does not lint).
 
 - CRC correctness is now a **regression test** (`tests/test_crc_analytic.py`):
   60 fresh pools, n_cal=150 so `B/(n+1)` is a visible share of α, `λ̂` compared
