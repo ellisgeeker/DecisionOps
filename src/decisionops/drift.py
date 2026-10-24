@@ -6,6 +6,12 @@ Between recertifications, audit labels arrive slowly. This module watches the
 a baseline window, without needing outcomes. A shift is an alarm to raise
 `audit_rate` or run `recertify`, not a new certificate.
 
+**It cannot see concept drift.** If the model gets worse at the same
+confidence, the score distribution does not move and this monitor says `ok`
+(findings §10: `ok` on 190/200 reps while true risk doubled). So `ok` never
+means the certificate still holds. Recertify on a fixed schedule from audit
+labels; use this monitor only to recertify *earlier*.
+
 **Certified rate vs automation rate.** `Decision.audit` forces some would-be
 AUTOs to escalate, so raw `action==auto` is pulled down by ~audit_rate.
 `reason in {certified, audit}` recovers the CRC acceptance rate and is
@@ -233,7 +239,11 @@ def run_drift_monitor(
 
     verdict = _verdict(delta_certified=delta_c, psi=psi, ks_p=ks_p)
     if verdict == "ok":
-        notes.append("No material shift in certified rate or confidence distribution.")
+        notes.append(
+            "No material shift in certified rate or confidence distribution. This does "
+            "not mean the certificate still holds: concept drift (worse accuracy at the "
+            "same confidence) is invisible here. Keep the scheduled recertify."
+        )
     elif verdict == "watch":
         notes.append(
             "Moderate shift. Increase scrutiny or audit_rate; plan a recertify "

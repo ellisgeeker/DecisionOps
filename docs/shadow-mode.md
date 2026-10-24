@@ -59,13 +59,20 @@ Low-volume traffic may need a higher audit rate later or a looser α.
         ▼
    decide   ── decisions.jsonl (AUTO / ESCALATE, audit flags)
         │
-        ├─► drift(baseline vs live)     # no labels
+        ├─► outcomes on audit=true      # expensive verdict, matured
+        │           │
+        │           ▼
+        │     recertify on a schedule → profile_next     # primary
         │
-        └─► outcomes on audit=true      # expensive verdict, matured
-                    │
-                    ▼
-              recertify → profile_next
+        └─► drift(baseline vs live)     # no labels; can only bring recertify forward
 ```
+
+**Recertify on a schedule; drift only brings it forward.** The label-free
+monitor watches the score distribution, so it cannot see *concept drift* — a
+model that gets worse at the same confidence. Measured on 200 simulated drifts
+([findings.md](findings.md) §10): concept drift doubled true risk (0.049 →
+0.095) while `drift` said `ok` on 190/200. Only labels reveal that. Treat a
+drift `ok` as "nothing visible changed", never as "the certificate still holds".
 
 ---
 
@@ -153,8 +160,9 @@ uv run decisionops recertify "$OUT/profile.json" \
 
 Exit codes worth wiring in CI/cron:
 
-- `drift`: `0` ok, `1` watch, `2` recertify_suggested  
-- `recertify`: non-zero if infeasible and you passed `--profile-out`
+- `recertify` (scheduled, primary): non-zero if infeasible and you passed `--profile-out`
+- `drift` (between runs): `0` ok, `1` watch, `2` recertify_suggested — `0` is not
+  evidence the certificate still holds
 
 ---
 
@@ -189,8 +197,18 @@ Rules:
 3. Ship `decide()` behind a flag; start with shadow still on if needed.
 4. Log every `Decision` (JSONL or equivalent).
 5. Store expensive-path verdicts as outcomes; mark audit rows.
-6. Cron: `drift` on rolling windows → on `recertify_suggested`, raise ε and/or queue `recertify`.
-7. Install `profile_next` only after review of the recertify diff (threshold, coverage, bound).
+6. **Schedule `recertify`** as soon as enough audit labels have matured since the
+   last one (~150 at α=5% restored α in the measurement above; more if
+   `severity` raises B). This is the main defence: it is the only step that
+   sees concept drift.
+7. Cron `drift` on rolling windows between scheduled runs. On
+   `recertify_suggested`, raise ε and bring the next `recertify` forward. A
+   drift `ok` does not let you skip a scheduled run.
+8. Install `profile_next` only after review of the recertify diff (threshold,
+   coverage, bound). Expect lower coverage after concept drift (46% → ~28% in
+   the measurement): that is the certificate correctly automating less.
+9. Until the next recertify completes, the live certificate can run above α.
+   Higher ε and shorter label maturity shrink that window.
 
 The certificate always holds **relative to the expensive path’s verdict** (or
 your labelling rule). Say that in the contract description.

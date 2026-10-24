@@ -284,10 +284,12 @@ is dropped from the roadmap.
   data at α=1%. Revisit the default only if a customer needs it for audit.
 - **Risk is asymmetric.** Only errors on the automatic (cheap) path are risk.
   Escalating a case that did not need it costs money, not safety.
-- **Certificates are recertified on unbiased live samples.** `decide` draws
-  the audit sample; `recertify` rebuilds CRC on matured audit labels; `drift`
-  watches behaviour between recertifications without labels. Organic
-  escalations stay out of the calibration set. Open problems: *Label strategy*.
+- **Certificates are recertified on unbiased live samples, on a schedule.**
+  `decide` draws the audit sample; `recertify` rebuilds CRC on matured audit
+  labels and is the primary defence. `drift` watches behaviour without labels
+  and can only bring a recertify forward: it cannot see concept drift (ok on
+  190/200 while risk doubled, findings §10). Organic escalations stay out of
+  the calibration set. Open problems: *Label strategy*.
 - **Code review is one showcase scenario, not the product.** Example: does this
   diff need a deep LLM review? The same contract describes ticket triage, risk
   review, and agent tool-call confirmation. Scenario specifics live in
@@ -364,9 +366,12 @@ escalated (low-confidence) cases — a biased sample. Plan:
   verdict is itself fallible, so a certificate holds *relative to that
   path's verdict*; say so in contracts and docs. Incidents and reverts are
   alarms (they reveal only some misses), never an estimate of miss rate.
-- **Label-free drift monitoring** between recertifications: automation rate
-  and confidence distribution shift (PSI / KS). A trigger prompts recertify
-  or a temporary rise in ε.
+- **Scheduled recertify, with label-free drift as an early trigger.**
+  Recertify whenever enough audit labels have matured (~150 at α=5% restored
+  α in findings §10). Between runs, `drift` watches automation rate and the
+  confidence distribution (PSI / KS); a trigger brings recertify forward or
+  temporarily raises ε. Decided 2026-10-24 after measuring that drift misses
+  concept drift — a drift `ok` never replaces a scheduled recertify.
 
 Open problems (not solved by the plan above):
 

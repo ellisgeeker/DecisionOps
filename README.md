@@ -122,11 +122,13 @@ decisionops recertify profile.json --decisions decisions.jsonl \
 
 Or in Python: `dops.run_recertification(profile, decisions=..., outcomes=..., predictions=...)`.
 
-Between recertifications, compare a live decisions window to a baseline (no labels):
+Run `recertify` on a schedule. Between runs, compare a live decisions window to a baseline (no labels) to bring the next one forward:
 
 ```bash
 decisionops drift live.jsonl --baseline baseline.jsonl --profile profile.json
 ```
+
+`drift` only sees the score distribution, so it misses a model that gets worse at the same confidence (concept drift). An `ok` is not evidence the certificate still holds; see [findings §10](docs/findings.md#10-the-label-loop-restores-α-after-drift--on-audit-labels-only).
 
 
 `gate` prints raw vs temperature-scaled **test** metrics, coverage at target risks with thresholds fit on **calibration only**, and a verdict (`go` / `watch` / `no-go`) decided by a CRC certificate: `no-go` when nothing certifies at `--verdict-alpha` (default 5%), `watch` when it certifies but automates less than `--min-coverage` (default 30%) of test traffic, else `go`. ECE is shown for context and never decides the verdict; the 30% bar is a policy choice to tune to your cost of escalation. `--output` writes `gate_report.json` and a self-contained `gate_report.html` with the reliability diagram and risk-coverage curve (no CDN).
