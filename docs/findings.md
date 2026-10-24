@@ -538,7 +538,7 @@ What it shows:
 2. **The selective certificate holds its promise.** Share of certificates whose
    true selective risk exceeds α: 3.0–8.2% across rows, against a 10% budget.
    The one row at 10.7% (α=5%, n=300) is 6 of 56 feasible draws: consistent
-   with a 10% rate (binomial p=0.47), not a measured violation.
+   with a 10% rate (binomial P(≥6 | 10%) = 0.49), not a measured violation.
 3. **It is conservative, and pays for it in coverage.** At α=5% it automates
    9–11% of traffic against an oracle 22%; at 10% it reaches 36% against 44% only
    at n=3000. Small pools often certify nothing (19% feasible at α=5%, n=300).
