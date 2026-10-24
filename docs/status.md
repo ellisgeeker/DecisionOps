@@ -120,7 +120,8 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 4. ~~Feedback format + `recertify` from audit rows only~~ — done 2026-10-24
    (drift simulation in `tests/test_recertify.py`).
 4b. ~~Label-free drift monitor~~ — done 2026-10-24 (`decisionops drift`).
-5. Certified conditional (selective) risk via Learn-Then-Test; certified
+5. ~~Certified conditional (selective) risk via Learn-Then-Test~~ — done
+   2026-10-24 (`--risk selective`, findings §11). Remaining: certified
    cascade thresholds (today the cascade curve is empirical, two-stage,
    oracle-priced).
 6. Score (ordinal) risk design; the #7/#9/#10 showcase bundle.
