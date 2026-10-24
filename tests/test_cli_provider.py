@@ -70,6 +70,8 @@ def test_provider_specific_flags_rejected_on_wrong_provider(tmp_path):
         ["--jev-base-url", "https://x.example"],
         ["--jev-model", "ft-1"],
         ["--jev-question", "noul"],
+        ["--http-url", "https://model.example/v1/predict"],
+        ["--http-token", "sekrit"],
     ]
     for extra in cases:
         result = runner.invoke(app, ["eval", str(dataset), "-p", str(predictions), *extra])
@@ -126,6 +128,78 @@ def test_eval_runs_jev_with_contract_descriptions(tmp_path, monkeypatch):
     assert seen["descriptions"] == {"a": "safe"}
     assert seen["contract_instructions"] == "Pick."
     assert seen["question_type"] == "choice"
+
+
+def test_eval_runs_http_with_contract_descriptions(tmp_path, monkeypatch):
+    """--provider http end to end, opener-free: the class is stubbed."""
+    import decisionops.adapters.http as http_mod
+    from decisionops.schemas import DecisionPrediction
+
+    seen = {}
+
+    class StubHttp:
+        def __init__(self, url, **kwargs):
+            seen["url"] = url
+            seen.update(kwargs)
+            self.url = url
+
+        def predict_many(self, cases):
+            return [
+                DecisionPrediction(
+                    id=c.id, prediction="a", probabilities={"a": 0.9, "b": 0.1}, provider="http"
+                )
+                for c in cases
+            ]
+
+    monkeypatch.setattr(http_mod, "HttpProvider", StubHttp)
+    dataset, _ = _write_pair(tmp_path)
+    contract = tmp_path / "contract.json"
+    contract.write_text(
+        json.dumps(
+            {
+                "name": "t",
+                "choices": ["a", "b"],
+                "auto_choices": ["a"],
+                "descriptions": {"a": "safe"},
+                "instructions": "Pick.",
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "eval", str(dataset), "--provider", "http",
+            "--http-url", "https://model.example/v1/predict",
+            "--http-token", "sekrit",
+            "--contract", str(contract),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["url"] == "https://model.example/v1/predict"
+    assert seen["token"] == "sekrit"
+    assert seen["descriptions"] == {"a": "safe"}
+    assert seen["contract_instructions"] == "Pick."
+
+
+def test_http_requires_url(tmp_path):
+    dataset, _ = _write_pair(tmp_path)
+    result = runner.invoke(app, ["eval", str(dataset), "--provider", "http"])
+    assert result.exit_code != 0
+    assert "--http-url" in result.output
+
+
+def test_eval_rejects_predictions_with_http(tmp_path):
+    dataset, predictions = _write_pair(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "eval", str(dataset), "-p", str(predictions),
+            "--provider", "http", "--http-url", "https://model.example/v1/predict",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "static" in result.output.lower()
 
 
 def test_jev_noul_requires_contract_with_yes_choice(tmp_path):

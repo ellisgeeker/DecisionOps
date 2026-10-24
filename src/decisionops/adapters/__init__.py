@@ -1,8 +1,15 @@
 """Decision model provider adapters."""
 
 from decisionops.adapters.base import DecisionProvider, StaticFileProvider
+from decisionops.adapters.http import HttpProvider
 
-__all__ = ["DecisionProvider", "JevProvider", "LayaProvider", "StaticFileProvider"]
+__all__ = [
+    "DecisionProvider",
+    "HttpProvider",
+    "JevProvider",
+    "LayaProvider",
+    "StaticFileProvider",
+]
 
 
 def __getattr__(name: str):

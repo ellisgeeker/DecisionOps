@@ -65,7 +65,7 @@ def _parse_risks(value: str) -> list[float]:
     return risks
 
 
-_PROVIDERS = ("static", "laya", "jev")
+_PROVIDERS = ("static", "laya", "jev", "http")
 
 ContractOption = Annotated[
     Path | None,
@@ -113,6 +113,22 @@ JevBaseUrlOption = Annotated[
     ),
 ]
 
+HttpUrlOption = Annotated[
+    str | None,
+    typer.Option(
+        "--http-url",
+        help="HTTP provider: POST JSON {id, state, question, choices} to this URL.",
+    ),
+]
+
+HttpTokenOption = Annotated[
+    str | None,
+    typer.Option(
+        "--http-token",
+        help="HTTP provider: Bearer token (else DECISIONOPS_HTTP_TOKEN).",
+    ),
+]
+
 
 def _load_contract_option(path: Path | None) -> DecisionContract | None:
     if path is None:
@@ -134,13 +150,15 @@ def _load_cases_and_predictions(
     jev_model: str | None = None,
     jev_base_url: str | None = None,
     jev_question: str | None = None,
+    http_url: str | None = None,
+    http_token: str | None = None,
     contract: DecisionContract | None = None,
 ):
     """
     Resolve a prediction source.
 
     `--predictions` (with or without `--provider static`) is the offline path.
-    `--provider laya|jev` runs live inference; `--predictions` is then rejected.
+    `--provider laya|jev|http` runs live inference; `--predictions` is then rejected.
     A contract's descriptions / instructions become the live model's input, so the
     certified input and the production input are the same.
     """
@@ -152,7 +170,7 @@ def _load_cases_and_predictions(
 
     name = (provider_name or ("static" if predictions is not None else None))
     if name is None:
-        raise typer.BadParameter("provide --predictions FILE or --provider laya|jev")
+        raise typer.BadParameter("provide --predictions FILE or --provider laya|jev|http")
     name = name.strip().lower()
     if name not in _PROVIDERS:
         raise typer.BadParameter(
@@ -168,6 +186,8 @@ def _load_cases_and_predictions(
             ("--jev-model", jev_model is not None, "jev"),
             ("--jev-base-url", jev_base_url is not None, "jev"),
             ("--jev-question", jev_question is not None, "jev"),
+            ("--http-url", http_url is not None, "http"),
+            ("--http-token", http_token is not None, "http"),
         )
         if value and name != owner
     ]
@@ -235,6 +255,28 @@ def _load_cases_and_predictions(
         except (RuntimeError, ValueError) as exc:
             raise typer.BadParameter(str(exc)) from exc
 
+    if name == "http":
+        from decisionops.adapters.http import HttpProvider
+
+        if not http_url:
+            raise typer.BadParameter("--provider http requires --http-url")
+        try:
+            provider = HttpProvider(
+                http_url,
+                token=http_token,
+                descriptions=descriptions,
+                contract_instructions=contract_instructions,
+            )
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        console.print(
+            f"[dim]Running HTTP provider ({provider.url}) on {len(cases)} cases…[/dim]"
+        )
+        try:
+            return cases, provider.predict_many(cases)
+        except (RuntimeError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+
     raise typer.BadParameter(f"unhandled provider {name!r}")
 
 
@@ -280,7 +322,7 @@ def eval_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya | jev."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev | http."),
     ] = None,
     model_dir: Annotated[
         Path | None,
@@ -309,6 +351,8 @@ def eval_cmd(
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
     jev_question: JevQuestionOption = None,
+    http_url: HttpUrlOption = None,
+    http_token: HttpTokenOption = None,
     contract: ContractOption = None,
 ) -> None:
     """
@@ -320,6 +364,7 @@ def eval_cmd(
       decisionops eval data.jsonl -p preds.jsonl
       decisionops eval data.jsonl --provider laya --limit 50
       decisionops eval data.jsonl --provider jev --limit 20
+      decisionops eval data.jsonl --provider http --http-url https://model.example/v1/predict
     """
     if n_bins < 1:
         raise typer.BadParameter("--n-bins must be >= 1")
@@ -336,6 +381,8 @@ def eval_cmd(
         jev_model=jev_model,
         jev_base_url=jev_base_url,
         jev_question=jev_question,
+        http_url=http_url,
+        http_token=http_token,
         contract=decision_contract,
     )
     result = evaluate(
@@ -368,7 +415,7 @@ def gate_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya | jev."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev | http."),
     ] = None,
     model_dir: Annotated[
         Path | None,
@@ -410,6 +457,8 @@ def gate_cmd(
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
     jev_question: JevQuestionOption = None,
+    http_url: HttpUrlOption = None,
+    http_token: HttpTokenOption = None,
     verdict_alpha: Annotated[
         float,
         typer.Option(
@@ -459,6 +508,8 @@ def gate_cmd(
         jev_model=jev_model,
         jev_base_url=jev_base_url,
         jev_question=jev_question,
+        http_url=http_url,
+        http_token=http_token,
         contract=decision_contract,
     )
     try:
@@ -590,7 +641,7 @@ def certify_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya | jev."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev | http."),
     ] = None,
     model_dir: Annotated[
         Path | None,
@@ -636,6 +687,8 @@ def certify_cmd(
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
     jev_question: JevQuestionOption = None,
+    http_url: HttpUrlOption = None,
+    http_token: HttpTokenOption = None,
     profile: Annotated[
         Path | None,
         typer.Option(
@@ -703,6 +756,8 @@ def certify_cmd(
         jev_model=jev_model,
         jev_base_url=jev_base_url,
         jev_question=jev_question,
+        http_url=http_url,
+        http_token=http_token,
         contract=decision_contract,
     )
     try:
@@ -765,7 +820,7 @@ def cascade_cmd(
     ] = None,
     provider: Annotated[
         str | None,
-        typer.Option("--provider", help="Prediction source: static | laya | jev."),
+        typer.Option("--provider", help="Prediction source: static | laya | jev | http."),
     ] = None,
     output: Annotated[
         Path | None,
@@ -791,6 +846,8 @@ def cascade_cmd(
     jev_model: JevModelOption = None,
     jev_base_url: JevBaseUrlOption = None,
     jev_question: JevQuestionOption = None,
+    http_url: HttpUrlOption = None,
+    http_token: HttpTokenOption = None,
 ) -> None:
     """
     Offline cascade: cost saved vs automated miss rate.
@@ -815,6 +872,8 @@ def cascade_cmd(
         jev_model=jev_model,
         jev_base_url=jev_base_url,
         jev_question=jev_question,
+        http_url=http_url,
+        http_token=http_token,
         contract=decision_contract,
     )
     try:

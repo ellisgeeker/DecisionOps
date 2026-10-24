@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -42,6 +43,10 @@ class DecisionPrediction(BaseModel):
     def probabilities_must_be_valid(cls, value: dict[str, float]) -> dict[str, float]:
         if len(value) < 2:
             raise ValueError("probabilities must contain at least 2 classes")
+        # NaN slips past `p < 0` and would make confidence NaN, silently
+        # escalating every case; inf normalises to NaN.
+        if any(not math.isfinite(p) for p in value.values()):
+            raise ValueError("probabilities must be finite")
         if any(p < 0.0 for p in value.values()):
             raise ValueError("probabilities must be non-negative")
         total = float(sum(value.values()))
