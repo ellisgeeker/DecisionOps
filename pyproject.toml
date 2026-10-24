@@ -1,6 +1,6 @@
 [project]
 name = "decisionops"
-version = "0.1.0a1"
+version = "0.1.0"
 description = "Reliability infrastructure for AI decision models"
 readme = "README.md"
 license = { text = "Apache-2.0" }

@@ -66,7 +66,8 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Generic HTTP decision provider (`--provider http`) | done |
 | High-probability certificates (`certify --confidence-level`) | done |
 | Weighted-loss CRC (`contract.severity`) | done |
-| v0.1.0 release | next |
+| v0.1.0 release | done |
+| Feedback format + `recertify` from audit rows | next (0.1.x) |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
@@ -86,6 +87,31 @@ uv run decisionops gate examples/gate-synthetic/dataset.jsonl \
 uv run decisionops eval examples/toy-routing/dataset.jsonl \
   --provider laya --limit 20 --output ./report/laya-toy
 ```
+
+### Python API
+
+Everything in `decisionops.__all__` is the supported API; deeper module paths may move.
+
+```python
+import decisionops as dops
+
+cases = dops.load_dataset("data.jsonl")
+preds = dops.load_predictions("preds.jsonl")
+contract = dops.load_contract("examples/contracts/code-review-routing.json")
+
+# Certify on history; freeze one alpha into a runtime profile with a 5% audit sample.
+report = dops.run_certification(cases, preds, alphas=[0.05], contract=contract)
+profile = dops.profile_from_report(report, 0.05, audit_rate=0.05)
+dops.save_profile(profile, "profile.json")
+
+# At runtime: AUTO or ESCALATE per prediction.
+profile = dops.load_profile("profile.json")
+profile.check_contract(contract)  # raises ProfileMismatchError after any certified change
+decision = dops.decide(new_prediction, profile)
+decision.action, decision.reason, decision.audit  # e.g. ("auto", "certified", False)
+```
+
+Recertify only on the `audit=True` rows once their labels arrive (a `recertify` command is planned for 0.1.x).
 
 `gate` prints raw vs temperature-scaled **test** metrics, coverage at target risks with thresholds fit on **calibration only**, and a verdict (`go` / `watch` / `no-go`) decided by a CRC certificate: `no-go` when nothing certifies at `--verdict-alpha` (default 5%), `watch` when it certifies but automates less than `--min-coverage` (default 30%) of test traffic, else `go`. ECE is shown for context and never decides the verdict; the 30% bar is a policy choice to tune to your cost of escalation. `--output` writes `gate_report.json` and a self-contained `gate_report.html` with the reliability diagram and risk-coverage curve (no CDN).
 

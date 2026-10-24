@@ -1,5 +1,53 @@
 """DecisionOps: reliability infrastructure for AI decision models."""
 
 from decisionops.__version__ import __version__
+from decisionops.cascade import CascadeReport, run_cascade
+from decisionops.conformal import (
+    CertificationReport,
+    CRCResult,
+    certify_threshold,
+    run_certification,
+)
+from decisionops.contract import DecisionContract, load_contract
+from decisionops.decide import (
+    CertificationProfile,
+    Decision,
+    ProfileMismatchError,
+    decide,
+    decide_many,
+    load_profile,
+    profile_from_report,
+    save_profile,
+)
+from decisionops.eval import evaluate, run_gate
+from decisionops.io import align_cases_and_predictions, load_dataset, load_predictions
+from decisionops.schemas import DecisionCase, DecisionPrediction, EvalResult, GateReport
 
-__all__ = ["__version__"]
+__all__ = [
+    "CRCResult",
+    "CascadeReport",
+    "CertificationProfile",
+    "CertificationReport",
+    "Decision",
+    "DecisionCase",
+    "DecisionContract",
+    "DecisionPrediction",
+    "EvalResult",
+    "GateReport",
+    "ProfileMismatchError",
+    "__version__",
+    "align_cases_and_predictions",
+    "certify_threshold",
+    "decide",
+    "decide_many",
+    "evaluate",
+    "load_contract",
+    "load_dataset",
+    "load_predictions",
+    "load_profile",
+    "profile_from_report",
+    "run_cascade",
+    "run_certification",
+    "run_gate",
+    "save_profile",
+]

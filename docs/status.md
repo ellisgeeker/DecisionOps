@@ -1,7 +1,7 @@
 # Project status
 
-**Last updated:** 2026-10-23 (weighted-loss CRC via contract severity; next is the v0.1.0 release)
-**Version:** 0.1.0a1 (unreleased)
+**Last updated:** 2026-10-24 (v0.1.0 tagged locally, not pushed; next is feedback format + `recertify`)
+**Version:** 0.1.0 (tagged locally 2026-10-24; no remote yet, not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
 incomplete. Written so it is usable after a gap of days or weeks.
@@ -16,14 +16,26 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: roadmap #11.3 — v0.1.0 release.** The rest of the label loop
-(feedback format, `recertify`, drift monitor) is 0.1.x; see *Label strategy*.
+**Next: feedback format + `recertify` from audit rows (0.1.x).** Before
+that, once the user picks a GitHub repo: add the remote and push `main` +
+the `v0.1.0` tag. PyPI is undecided.
+
+Done 2026-10-24 — v0.1.0 (local):
+
+- Top-level public API in `decisionops/__init__.py` (`decide`,
+  `run_certification`, `load_profile`, `DecisionContract`, …); pinned by
+  `tests/test_public_api.py`. Deeper module paths are not promised stable.
+- Deleted dead `report/json_report.py` (the live `write_json_report` is in
+  `report/__init__.py`). Version `0.1.0`, `CHANGELOG.md`, README Python API
+  section.
+- Wheel + sdist build; the wheel installs in a clean venv and runs
+  `certify --profile` → `decide` on the toy pack.
 
 Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 
 1. ~~Laya builtin-temperature guard~~ — done 2026-10-23.
 2. ~~Weighted-loss CRC~~ — done 2026-10-23, below.
-3. v0.1.0 release — **next**.
+3. ~~v0.1.0 release~~ — done locally 2026-10-24.
 4. Feedback format + `recertify` from audit rows only; validate with simulated
    drift on benchmark pools.
 5. Certified conditional (selective) risk via Learn-Then-Test; certified
@@ -256,9 +268,7 @@ is dropped from the roadmap.
     2026-09-27. Remaining, in order:
     1. ~~**Audit sampling in `decide()`**~~ — done 2026-10-23.
     2. ~~**Weighted-loss CRC**~~ — done 2026-10-23 (`contract.severity`).
-    3. **v0.1.0 release** — **next** — remote repo, top-level public API
-       (`decide`, `run_certification`, `load_profile`, …), delete dead
-       `report/json_report.py`, bump `0.1.0a1` → `0.1.0`, changelog, tag.
+    3. ~~**v0.1.0 release**~~ — done locally 2026-10-24; remote repo pending.
     4. **0.1.x: closing the label loop** — outcome feedback format,
        `recertify` from audit samples only, label-free drift monitor. See
        *Label strategy*.
@@ -411,7 +421,7 @@ in tree.
 
 ### Validation performed
 
-- **158 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **160 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).
