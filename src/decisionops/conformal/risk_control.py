@@ -157,6 +157,17 @@ def clopper_pearson_upper(k: int, n: int, confidence_level: float) -> float:
     return float(beta_dist.ppf(confidence_level, k + 1, n - k))
 
 
+def min_selective_accepted(alpha: float, confidence_level: float) -> int:
+    """
+    Fewest auto-accepted calibration cases a selective certificate can pass on.
+
+    Same algebra as `min_calibration_samples_hp`, but over *accepted* cases:
+    with zero errors among m accepted, the bound is <= alpha only once
+    m >= ln(delta) / ln(1 - alpha) — 45 at alpha=5%, 90%; 59 at 95%.
+    """
+    return min_calibration_samples_hp(alpha, confidence_level)
+
+
 def _controlled_quantity(severity_of: SeverityOf | None) -> str:
     if severity_of is None:
         return "joint_automated_error_rate"
@@ -490,3 +501,124 @@ def evaluate_certified_threshold(
         "joint_error_rate": joint_error,
         "selective_risk": float(wrong[accepted].mean()) if n_accepted else float("nan"),
     }
+
+
+SELECTIVE_QUANTITY = "selective_automated_error_rate"
+
+
+def certify_selective_threshold(
+    pairs: list[tuple[DecisionCase, DecisionPrediction]],
+    alpha: float,
+    *,
+    confidence_level: float = 0.9,
+    auto_choices: frozenset[str] | None = None,
+) -> CRCResult:
+    """
+    Certify the error rate **among auto-accepted cases**: Learn-Then-Test.
+
+    This is the question customers ask ("of what you automate, is the error
+    rate <= alpha?"), unlike `certify_threshold`, which bounds the share of
+    *all* traffic that is auto-accepted and wrong. Selective risk is a ratio of
+    two random counts, so CRC's monotone-loss argument does not apply. Instead,
+    for each candidate lambda test
+
+        H0(lambda): P(wrong | accepted at lambda) > alpha
+
+    with a one-sided Clopper-Pearson bound on k errors among the m accepted
+    calibration cases (exact, given m), and reject when that bound is <= alpha.
+
+    **Fixed-sequence testing, strict to loose.** Candidates are the distinct
+    calibration confidences, scanned from the highest down; the scan stops at
+    the first lambda whose bound exceeds alpha. Each test runs at level delta,
+    and the family-wise error is still <= delta because the order is fixed
+    before looking at any label. The scan **starts** at the strictest lambda
+    that accepts at least `min_selective_accepted(alpha, level)` cases: with
+    fewer, even zero errors cannot pass, so stopping there would certify
+    nothing. That start depends only on confidences, never on labels, so the
+    order stays pre-specified and the guarantee holds:
+
+        P( selective risk(lambda_hat) <= alpha ) >= confidence_level
+
+    over the calibration draw. High-probability only: there is no
+    in-expectation version, and 0-1 loss only (contract severity is ignored).
+    """
+    if not pairs:
+        raise ValueError("cannot certify on empty calibration set")
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    _check_confidence_level(confidence_level)
+
+    conf, wrong = _confidence_and_wrong(pairs, auto_choices)
+    n = int(conf.size)
+    min_m = min_selective_accepted(alpha, confidence_level)
+    base = {
+        "alpha": alpha,
+        "guarantee": "high_probability",
+        "confidence_level": confidence_level,
+        "controlled_quantity": SELECTIVE_QUANTITY,
+        "n_calibration": n,
+        "min_n_required": min_m,
+        "loss_bound": 1.0,
+    }
+    notes: list[str] = []
+
+    grid = np.unique(conf[np.isfinite(conf)])[::-1]  # strict -> loose
+    if grid.size == 0:
+        notes.append("No calibration case is on the automatic path; nothing to certify.")
+        return CRCResult(threshold=None, feasible=False, notes=notes, **base)
+
+    accepted_counts = np.array([int(np.sum(conf >= lam)) for lam in grid])
+    # First (strictest) lambda with enough accepted cases to be passable at all.
+    passable = accepted_counts >= min_m
+    start = int(np.argmax(passable)) if passable.any() else None
+    if start is None:
+        notes.append(
+            f"Infeasible: only {int(accepted_counts.max())} calibration cases are on the "
+            f"automatic path; a selective certificate at alpha={alpha:.4f} and "
+            f"{confidence_level:.0%} needs at least {min_m} accepted cases even with zero "
+            "errors."
+        )
+        return CRCResult(threshold=None, feasible=False, notes=notes, **base)
+
+    chosen: float | None = None
+    chosen_k = chosen_m = 0
+    chosen_ucb = 0.0
+    for lam, m in zip(grid[start:], accepted_counts[start:], strict=True):
+        k = int(np.sum(wrong[conf >= lam]))
+        ucb = clopper_pearson_upper(k, int(m), confidence_level)
+        if ucb > alpha:
+            break
+        chosen, chosen_k, chosen_m, chosen_ucb = float(lam), k, int(m), ucb
+
+    if chosen is None:
+        notes.append(
+            f"The strictest threshold with >= {min_m} accepted cases already has an "
+            f"upper selective-error bound above alpha={alpha:.4f}; abstain at this level."
+        )
+        return CRCResult(threshold=None, feasible=False, notes=notes, **base)
+
+    coverage = chosen_m / n
+    if coverage < 0.05:
+        notes.append(f"Certified threshold covers only {coverage:.1%} of calibration traffic.")
+    notes.append(
+        f"Selective certificate: with probability >= {confidence_level:.0%} over the "
+        "calibration draw, the error rate among auto-accepted cases is <= alpha."
+    )
+    return CRCResult(
+        threshold=chosen,
+        feasible=True,
+        empirical_joint_error=chosen_k / n,
+        crc_bound_value=chosen_ucb,
+        coverage_calibration=coverage,
+        empirical_selective_risk_calibration=chosen_k / chosen_m,
+        n_accepted_calibration=chosen_m,
+        notes=notes,
+        metadata={
+            "n_grid_candidates": int(grid.size),
+            "scan_start_index": start,
+            "auto_choices": sorted(auto_choices) if auto_choices is not None else None,
+            "bound": "clopper_pearson_selective",
+            "method": "learn_then_test_fixed_sequence",
+        },
+        **base,
+    )

@@ -209,7 +209,15 @@ def print_certification_report(
 
     level_meta = (report.metadata or {}).get("confidence_level")
     high_prob = level_meta is not None
-    if high_prob:
+    selective = (report.metadata or {}).get("risk") == "selective"
+    quantity = "selective error" if selective else "joint error"
+    if selective:
+        console.print(
+            f"guarantee: [bold]selective, high-probability[/bold] — P(error rate among "
+            f"auto-accepted <= alpha) >= {float(level_meta):.0%} over the calibration "
+            "draw (Learn-Then-Test)"
+        )
+    elif high_prob:
         console.print(
             f"guarantee: [bold]high-probability[/bold] — P(joint error <= alpha) "
             f">= {float(level_meta):.0%} over the calibration draw (Clopper-Pearson)"
@@ -232,7 +240,7 @@ def print_certification_report(
     console.print()
 
     cert = Table(
-        title="Certified thresholds (joint automated error <= alpha)",
+        title=f"Certified thresholds ({quantity} <= alpha)",
         show_header=True,
         header_style="bold",
     )

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `certify --risk selective` (`run_certification(risk="selective")`,
+  `certify_selective_threshold`): certifies the error rate **among**
+  auto-accepted cases with Learn-Then-Test, high-probability only, 0-1 loss.
+  Joint CRC stays the default. `recertify` keeps a selective profile selective.
+- findings §11: joint CRC at α=5% leaves ~10.6% error among automated cases;
+  the selective certificate exceeds α in 3–8% of draws against a 10% budget, at
+  the cost of much lower coverage.
+
 ## 0.1.1 — 2026-10-24
 
 Closes the label loop after go-live: audit labels feed recertification, and a

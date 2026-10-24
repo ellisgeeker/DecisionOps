@@ -5,6 +5,7 @@ from decisionops.cascade import CascadeReport, run_cascade
 from decisionops.conformal import (
     CertificationReport,
     CRCResult,
+    certify_selective_threshold,
     certify_threshold,
     run_certification,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "RecertifyReport",
     "__version__",
     "align_cases_and_predictions",
+    "certify_selective_threshold",
     "certify_threshold",
     "decide",
     "decide_many",

@@ -23,7 +23,9 @@ from pydantic import BaseModel, Field
 
 from decisionops.calibration.temperature import apply_temperature
 from decisionops.conformal.risk_control import (
+    SELECTIVE_QUANTITY,
     CRCResult,
+    certify_selective_threshold,
     certify_threshold,
     evaluate_certified_threshold,
 )
@@ -296,14 +298,24 @@ def run_recertification(
             notes=notes,
         )
 
-    cert = certify_threshold(
-        pairs,
-        profile.alpha,
-        loss_bound=loss_bound,
-        auto_choices=auto,
-        severity_of=severity_of,
-        confidence_level=level,
-    )
+    # Keep the kind of guarantee the live profile was certified with.
+    if profile.controlled_quantity == SELECTIVE_QUANTITY:
+        cert = certify_selective_threshold(
+            pairs,
+            profile.alpha,
+            confidence_level=level if level is not None else 0.9,
+            auto_choices=auto,
+        )
+        severity_of = None
+    else:
+        cert = certify_threshold(
+            pairs,
+            profile.alpha,
+            loss_bound=loss_bound,
+            auto_choices=auto,
+            severity_of=severity_of,
+            confidence_level=level,
+        )
     notes.extend(cert.notes)
 
     # Empirical check on the same audit set (not a held-out guarantee).

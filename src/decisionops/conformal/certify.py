@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,7 @@ from decisionops.calibration.temperature import (
 )
 from decisionops.conformal.risk_control import (
     CRCResult,
+    certify_selective_threshold,
     certify_threshold,
     evaluate_certified_threshold,
 )
@@ -19,6 +20,9 @@ from decisionops.contract import DecisionContract, auto_set_of
 from decisionops.io import align_cases_and_predictions
 from decisionops.schemas import DecisionCase, DecisionPrediction, SplitInfo
 from decisionops.split import split_pairs
+
+RiskKind = Literal["joint", "selective"]
+SELECTIVE_DEFAULT_LEVEL = 0.9
 
 
 class CertifiedLevel(BaseModel):
@@ -63,9 +67,15 @@ def run_certification(
     loss_bound: float | None = None,
     contract: DecisionContract | None = None,
     confidence_level: float | None = None,
+    risk: RiskKind = "joint",
 ) -> CertificationReport:
     """
     Three-way split: fit temperature, derive CRC thresholds, verify — on disjoint data.
+
+    `risk="joint"` (default) bounds the share of *all* traffic that is
+    auto-accepted and wrong. `risk="selective"` bounds the error rate *among*
+    auto-accepted cases (Learn-Then-Test); it is high-probability only, so
+    `confidence_level` defaults to 0.9, and it needs 0-1 loss.
 
     `confidence_level` (e.g. 0.95) switches every level from an in-expectation
     CRC certificate to a high-probability one; see `certify_threshold`.
@@ -85,6 +95,18 @@ def run_certification(
         alphas = [0.01, 0.05, 0.10]
     if not 0.0 <= temp_ratio < 1.0:
         raise ValueError(f"temp_ratio must be in [0, 1), got {temp_ratio}")
+    if risk not in ("joint", "selective"):
+        raise ValueError(f"risk must be 'joint' or 'selective', got {risk!r}")
+    if risk == "selective":
+        if contract is not None and contract.severity:
+            raise ValueError(
+                "selective risk is an error *rate* among accepted cases and needs 0-1 "
+                "loss; contract severity is not supported with risk='selective'"
+            )
+        if loss_bound not in (None, 1.0):
+            raise ValueError(f"selective risk needs 0-1 loss, got loss_bound={loss_bound}")
+        if confidence_level is None:
+            confidence_level = SELECTIVE_DEFAULT_LEVEL
     if contract is not None:
         contract.validate_data(cases, predictions)
     auto = auto_set_of(contract)
@@ -129,14 +151,19 @@ def run_certification(
 
     levels: list[CertifiedLevel] = []
     for alpha in alphas:
-        cert = certify_threshold(
-            cal_pairs,
-            alpha,
-            loss_bound=loss_bound,
-            auto_choices=auto,
-            severity_of=severity_of,
-            confidence_level=confidence_level,
-        )
+        if risk == "selective":
+            cert = certify_selective_threshold(
+                cal_pairs, alpha, confidence_level=confidence_level, auto_choices=auto
+            )
+        else:
+            cert = certify_threshold(
+                cal_pairs,
+                alpha,
+                loss_bound=loss_bound,
+                auto_choices=auto,
+                severity_of=severity_of,
+                confidence_level=confidence_level,
+            )
         test_stats = None
         held = None
         if cert.feasible and cert.threshold is not None:
@@ -146,7 +173,10 @@ def run_certification(
                 auto_choices=auto,
                 severity_of=severity_of,
             )
-            held = bool(test_stats["joint_error_rate"] <= alpha)
+            measured = "selective_risk" if risk == "selective" else "joint_error_rate"
+            value = float(test_stats[measured])
+            # No accepted test case: selective risk is undefined, nothing to compare.
+            held = None if value != value else bool(value <= alpha)
         levels.append(
             CertifiedLevel(certificate=cert, test=test_stats, bound_held_on_test=held)
         )
@@ -165,11 +195,24 @@ def run_certification(
                 f"{sorted(contract.auto_set)} count as risk; escalations never do. "
                 "Certified quantity is the automated miss rate."
             )
-    notes.append(
-        "Certified quantity is the (possibly severity-weighted) joint automated "
-        "error, not conditional selective risk. Assumes exchangeability."
-    )
-    if confidence_level is None:
+    if risk == "selective":
+        notes.append(
+            "Certified quantity is the selective error rate: errors among auto-accepted "
+            "cases only (Learn-Then-Test, fixed-sequence Clopper-Pearson). Assumes "
+            "exchangeability."
+        )
+    else:
+        notes.append(
+            "Certified quantity is the (possibly severity-weighted) joint automated "
+            "error, not conditional selective risk. Assumes exchangeability."
+        )
+    if risk == "selective":
+        notes.append(
+            f"Selective guarantee: with probability >= {confidence_level:.0%} over the "
+            "calibration draw, the error rate among auto-accepted cases is <= alpha. "
+            "A test split can still land above alpha by sampling noise."
+        )
+    elif confidence_level is None:
         notes += [
             "CRC guarantee is on E[loss], marginal over calibration and test draws.",
             "A single test split exceeding alpha is expected roughly half the time: "
@@ -211,6 +254,7 @@ def run_certification(
             "guarantee": "expectation" if confidence_level is None else "high_probability",
             "confidence_level": confidence_level,
             "loss_bound": loss_bound,
+            "risk": risk,
             "temp_ratio": temp_ratio,
             "protocol": "three_way_split_temp_crc_test",
             "contract": contract.summary() if contract is not None else None,

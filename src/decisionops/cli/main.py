@@ -735,6 +735,15 @@ def certify_cmd(
         int,
         typer.Option("--audit-seed", help="Profile: salt for the audit draw."),
     ] = 0,
+    risk: Annotated[
+        str,
+        typer.Option(
+            "--risk",
+            help="joint: share of all traffic auto-accepted AND wrong (CRC). "
+            "selective: error rate AMONG auto-accepted cases (Learn-Then-Test; "
+            "high-probability only, --confidence-level defaults to 0.9).",
+        ),
+    ] = "joint",
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -747,6 +756,9 @@ def certify_cmd(
     With --confidence-level the bound instead holds with that probability over
     the calibration draw (Clopper-Pearson RCPS).
 
+    With --risk selective the bound is on the error rate among auto-accepted
+    cases ("of what you automate, at most alpha is wrong").
+
     Levels with too little calibration data, or where no threshold can hold
     alpha, are reported as infeasible rather than given a threshold.
     """
@@ -758,6 +770,8 @@ def certify_cmd(
         raise typer.BadParameter("--confidence-level must be in (0, 1)")
     if not 0.0 <= audit_rate < 1.0:
         raise typer.BadParameter("--audit-rate must be in [0, 1)")
+    if risk not in ("joint", "selective"):
+        raise typer.BadParameter("--risk must be 'joint' or 'selective'")
     if profile is None and (audit_rate != 0.0 or audit_seed != 0):
         raise typer.BadParameter("--audit-rate / --audit-seed need --profile")
 
@@ -797,6 +811,7 @@ def certify_cmd(
             calibrate=calibrate,
             contract=decision_contract,
             confidence_level=confidence_level,
+            risk=risk,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc

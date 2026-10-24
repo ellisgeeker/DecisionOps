@@ -500,6 +500,68 @@ uv run python scripts/measure_label_loop.py            # 200 reps, ~40 s, offlin
 
 ---
 
+## 11. Certifying the error rate among what you automate (selective risk)
+
+**Measured 2026-10-24.** CRC bounds the share of *all* traffic that is
+auto-accepted and wrong. Customers usually ask something else: "of the cases
+you automate, how many are wrong?" Those are different numbers, and the joint
+certificate does not answer the second.
+
+`certify --risk selective` bounds the error rate among auto-accepted cases with
+Learn-Then-Test: one-sided Clopper-Pearson per threshold, fixed-sequence from
+the strictest down. High-probability only; 0-1 loss only.
+
+Calibrated pool, `c ~ U(0.55, 0.999)`, `P(correct | c) = c`, so true selective
+risk at λ is `1 − (λ + 0.999)/2` in closed form. 300 reps per row, `n` is the
+whole pool (the certifier sees all of it; no split):
+
+| α | n | Joint CRC at α: error among automated | Selective 90%: error among automated (share > α) | coverage | feasible |
+|---|--:|---|---|--:|--:|
+| 5% | 300 | 0.105 | 0.041 (10.7%) | 18.0% | 19% |
+| 5% | 1000 | 0.106 | 0.022 (5.9%) | 9.2% | 62% |
+| 5% | 3000 | 0.106 | 0.025 (6.0%) | 10.7% | 83% |
+| 10% | 300 | 0.149 | 0.040 (3.0%) | 17.4% | 67% |
+| 10% | 1000 | 0.150 | 0.061 (6.9%) | 26.7% | 86% |
+| 10% | 3000 | 0.150 | 0.081 (8.2%) | 35.6% | 94% |
+
+Joint CRC exceeded α among automated cases in **every** rep of every row.
+Oracle coverage (the threshold whose true selective risk is exactly α) is 21.8%
+at 5% and 44.1% at 10%.
+
+What it shows:
+
+1. **A joint certificate at α says little about the error rate among what is
+   automated.** At joint α=5%, about 10.6% of the auto-accepted cases are
+   wrong; at 10%, about 15%. The joint number is a fraction of all traffic;
+   the customer's question is a fraction of the automated part. Never quote
+   one as the other.
+2. **The selective certificate holds its promise.** Share of certificates whose
+   true selective risk exceeds α: 3.0–8.2% across rows, against a 10% budget.
+   The one row at 10.7% (α=5%, n=300) is 6 of 56 feasible draws: consistent
+   with a 10% rate (binomial p=0.47), not a measured violation.
+3. **It is conservative, and pays for it in coverage.** At α=5% it automates
+   9–11% of traffic against an oracle 22%; at 10% it reaches 36% against 44% only
+   at n=3000. Small pools often certify nothing (19% feasible at α=5%, n=300).
+   Plan for thousands of calibration rows, and expect to automate less than the
+   joint certificate would — that gap is the honest price of the stronger claim.
+
+Two design points, both measured:
+
+- **The scan starts at the strictest λ that accepts ≥ `ln δ / ln(1−α)` cases**
+  (45 at α=5%, 90%). Below that even zero errors cannot pass, so starting at
+  the very top would end the scan on its first test. The start depends only on
+  confidences, never on labels, so the test order is still fixed in advance.
+- **The fixed sequence is load-bearing.** Testing every λ and keeping the
+  loosest that passes (multiple testing, no correction) violated 14.9% of the
+  time at α=5%, n=600, against δ=10%; the fixed-sequence rule violated 1.4%.
+  `tests/test_selective_risk.py::test_violation_rate_is_at_most_delta` uses
+  that design and fails on the uncorrected variant.
+
+Limits: one calibrated synthetic pool shape, binary, one automatic choice; 90%
+confidence only. Contract `severity` is rejected with `--risk selective`.
+
+---
+
 ## Limits on all of the above
 
 **Laya scope.** One checkpoint, zero-shot, one task shape, 77/151 options. Its

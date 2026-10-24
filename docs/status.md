@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-24 (0.1.1 released; next is certified selective risk or the showcase pack)
+**Last updated:** 2026-10-24 (certified selective risk done, findings §11; next is the showcase pack)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,9 +16,24 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: pick one** — certified conditional (selective) risk (Learn-Then-Test;
-the question customers ask most) or the code-review showcase pack (#7/#9/#10).
-PyPI is still undecided.
+**Next: the code-review showcase pack (#7/#9/#10)**, or certified cascade
+thresholds. PyPI is still undecided.
+
+Done 2026-10-24 — certified selective risk ([findings.md](findings.md) §11):
+
+- `certify --risk selective` / `run_certification(risk="selective")` bounds
+  the error rate *among* auto-accepted cases: Learn-Then-Test, one-sided
+  Clopper-Pearson, fixed-sequence from the strictest λ down.
+  High-probability only (`--confidence-level` defaults to 0.9), 0-1 loss
+  only (contract `severity` is rejected).
+- The scan starts at the strictest λ with ≥ `ln δ / ln(1−α)` accepted cases
+  (45 at 5%, 90%); that start uses confidences only, so order stays fixed.
+- Measured: joint CRC at 5% leaves ~10.6% error among automated cases (every
+  rep above α); the selective certificate exceeds α in 3–8% of draws (budget
+  10%). Conservative: 9–11% coverage vs oracle 22% at α=5%; small pools often
+  certify nothing.
+- Profiles carry `controlled_quantity`; `recertify` keeps a selective profile
+  selective. Test with teeth: dropping the fixed sequence fails it.
 
 Done 2026-10-24 — 0.1.1 released: tag `v0.1.1` pushed. Adds recertify, drift,
 the shadow-mode guide, the loop measurement (findings §10) and the

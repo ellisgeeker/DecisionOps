@@ -418,7 +418,25 @@ was issued.
 
 What is certified is the **joint automated error** (severity-weighted when the contract sets `severity`) — the share of *all*
 traffic auto-accepted *and* wrong — bounded by `α` in expectation. Not the
-conditional selective risk `gate` reports. Levels where the calibration set is too
+conditional selective risk `gate` reports.
+
+### Error rate among what you automate (`--risk selective`)
+
+The joint number answers "how much of all traffic is automated and wrong". The
+question most teams ask is different: "of what you automate, how much is
+wrong?" They are not interchangeable — at joint α=5%, about 10.6% of the
+automated cases were wrong in our measurement. To certify the second:
+
+```bash
+uv run decisionops certify data.jsonl -p preds.jsonl \
+  --alphas 0.05 --risk selective            # --confidence-level defaults to 0.9
+```
+
+This uses Learn-Then-Test: with probability ≥ 90% over the calibration draw, the
+error rate among auto-accepted cases is ≤ `α`. It is high-probability only, needs
+0-1 loss (no contract `severity`), and it is conservative: at α=5% it automated
+about 10% of traffic where an oracle could reach 22%. Plan for thousands of
+calibration rows. See [findings §11](docs/findings.md#11-certifying-the-error-rate-among-what-you-automate-selective-risk). Levels where the calibration set is too
 small (`α ≥ B/(n+1)` fails) or where no threshold holds `α` are reported
 **INFEASIBLE** rather than given a number.
 
