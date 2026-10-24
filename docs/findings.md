@@ -436,6 +436,70 @@ uv run python scripts/ab_certify_calibration.py            # ~1 min, offline
 
 ---
 
+## 10. The label loop restores α after drift — on audit labels only
+
+**Measured 2026-10-24.** The question: once traffic drifts after go-live, does
+recertifying on the random audit sample bring the true risk back to α, and does
+the obvious shortcut (recertify on the labelled escalations) fail?
+
+Setup (`scripts/measure_label_loop.py`, 200 reps, α=5%). Certify on 3000
+pre-drift cases, then drift; route 3000 drifted cases with the old profile at
+audit rate ε; recertify on the audit labels only. Confidence `c ~ U(lo, 0.999)`
+with `P(correct | c) = c − δ`, so **true risk is computed in closed form** (checked
+against 2M Monte Carlo draws) — no test-split noise in the comparison.
+
+- **concept drift:** same scores, accuracy down 10 points at every c (δ=0.10)
+- **score drift:** still calibrated, traffic mass moves up (`lo` 0.55 → 0.75)
+
+Mean true joint error (share above α in brackets); recertified coverage last:
+
+| | concept | score |
+|---|---|---|
+| pre-drift, old λ | 0.049 (43%) | — |
+| **after drift, old λ** | **0.095 (100%)** | **0.088 (100%)** |
+| naive: recertify on organic escalations | 0.122 (100%) | 0.096 (100%) |
+| recertify CRC, ε=5% (n≈150) | 0.046 (35%), cov 28% | 0.046 (36%), cov 59% |
+| recertify CRC, ε=10% (n≈300) | 0.048 (44%), cov 29% | 0.047 (36%), cov 60% |
+| recertify CRC, ε=20% (n≈600) | 0.049 (46%), cov 29% | 0.048 (43%), cov 62% |
+| recertify HP 90%, ε=5% | 0.028 (6%), cov 19% | 0.027 (7%), cov 45% |
+| recertify HP 90%, ε=20% | 0.039 (10%), cov 25% | 0.038 (7%), cov 55% |
+
+What it shows:
+
+1. **Drift breaks the live certificate.** Both drifts roughly double true risk,
+   and every one of the 200 reps lands above α.
+2. **Audit-only recertify restores α, from ~150 labels.** CRC mean risk returns
+   to 0.046–0.049, just under α, as an in-expectation guarantee should. The
+   high-probability mode keeps the share above α at 6–10%, within its 10%
+   budget, at the cost of coverage.
+3. **The shortcut is worse than doing nothing.** Organic escalations are the
+   cases the old λ rejected, all below it. CRC on that set has never seen the
+   high-confidence errors, so whenever it certified anything (200/200 reps
+   under concept drift, 197/200 under score drift) the threshold was *looser*
+   than the old one: 0.122 under concept drift, against 0.095 for no change.
+   ~1600 labels do not help when they are the wrong ones. This is the
+   measured reason `recertify` reads `Decision.audit` and nothing else.
+4. **The label-free monitor cannot see concept drift.** The score distribution
+   is unchanged, so `drift` said `ok` on 190/200 reps while true risk doubled.
+   Score drift was flagged on 200/200. Drift monitoring is not a substitute for
+   the audit sample; only labels reveal a model that got worse at the same
+   confidence.
+
+A regression test pins point 2 with teeth:
+`tests/test_recertify.py::test_label_loop_restores_alpha_after_concept_drift`
+uses ~100 audit labels, where the CRC penalty moves mean risk by ~0.010
+(measured 0.047 vs 0.057 without it), so deleting the penalty fails the test.
+
+Limits: synthetic binary pools with one auto choice, two drift shapes, α=5%
+only. The audit sample here is the decision log's own `audit=True` rows; real
+labels arrive late and noisy, which this does not model.
+
+```bash
+uv run python scripts/measure_label_loop.py            # 200 reps, ~40 s, offline
+```
+
+---
+
 ## Limits on all of the above
 
 **Laya scope.** One checkpoint, zero-shot, one task shape, 77/151 options. Its

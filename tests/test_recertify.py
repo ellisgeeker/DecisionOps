@@ -273,3 +273,53 @@ def test_cli_recertify_infeasible_exits_nonzero(tmp_path):
         ],
     )
     assert result.exit_code != 0
+
+
+def test_label_loop_restores_alpha_after_concept_drift():
+    """
+    The loop's core claim, with closed-form true risk (scripts/measure_label_loop.py).
+
+    Same scores, accuracy down 10 points at every confidence: the old threshold
+    sits far above alpha, and recertify on ~100 audit labels alone brings mean
+    true risk back to alpha.
+
+    Teeth: at 100 labels the CRC penalty B/(n+1) shifts mean risk by ~0.010
+    (measured 0.0471 vs 0.0568 without it, se ~0.001 at 600 reps). With 200
+    reps the se is ~0.0016, so the mean-vs-alpha check fails a penalty-free
+    rule. At ~400 labels the gap shrinks to ~0.003 and such a rule would pass.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from decisionops.conformal.risk_control import certify_threshold
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "measure_label_loop.py"
+    spec = importlib.util.spec_from_file_location("measure_label_loop", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    alpha, lo, delta, n_audit = 0.05, 0.55, 0.10, 100
+    old, new = [], []
+    for rep in range(200):
+        rng = np.random.default_rng(81_000 + rep)
+        cases, preds = mod.pool(rng, 600, lo, 0.0, f"pre{rep}")
+        report = run_certification(
+            cases, preds, alphas=[alpha], contract=ROUTING, calibrate=False, seed=rep
+        )
+        old.append(mod.true_risk(profile_from_report(report, alpha).threshold, lo, delta))
+        # The audit sample is uniform over drifted traffic: draw it directly.
+        cases, preds = mod.pool(rng, n_audit, lo, delta, f"audit{rep}")
+        cert = certify_threshold(
+            list(zip(cases, preds, strict=True)), alpha, auto_choices=ROUTING.auto_set
+        )
+        if cert.feasible:
+            new.append(mod.true_risk(cert.threshold, lo, delta))
+
+    # Drift really broke the live certificate (a few small pre-drift pools
+    # certify a very strict threshold that still holds, hence mean, not min).
+    assert np.mean(old) > alpha + 0.02
+    assert np.mean(np.array(old) > alpha) > 0.9
+    assert len(new) >= 190
+    mean, se = float(np.mean(new)), float(np.std(new, ddof=1) / np.sqrt(len(new)))
+    assert mean <= alpha + 1.0 * se, f"recertified mean risk {mean:.4f} (se {se:.4f})"
+    assert mean > alpha - 0.012, f"recertify far too conservative: {mean:.4f}"

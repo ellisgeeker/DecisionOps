@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-24 (pushed to GitHub; next is measuring the label loop end to end)
+**Last updated:** 2026-10-24 (label loop measured, findings §10; next is release 0.1.1)
 **Version:** 0.1.0 (tagged and pushed 2026-10-24; not on PyPI; recertify/drift/shadow unreleased on main)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,10 +16,24 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: measure the label loop end to end** — repeated simulated drift showing
-the old profile's true risk exceeds α and `recertify` on audit rows brings it
-back under α; record the numbers in findings.md. Then certified conditional
-(selective) risk or the code-review showcase pack.
+**Next: release 0.1.1** (recertify / drift / shadow guide / loop measurement
+are on `main`, unreleased). Then certified conditional (selective) risk or the
+code-review showcase pack.
+
+Done 2026-10-24 — label loop measured end to end ([findings.md](findings.md) §10):
+
+- `scripts/measure_label_loop.py`, 200 reps, α=5%, closed-form true risk.
+  Drift doubles true risk of the old λ (0.049 → 0.095 concept, 0.088 score;
+  100% of reps above α). Audit-only CRC recertify restores mean risk to
+  0.046–0.049 from ~150 labels; HP 90% keeps the share above α at 6–10%.
+- Recertifying on organic escalations is worse than no change (0.122 under
+  concept drift): those rows sit below the old λ, so CRC certifies a looser
+  threshold. Measured justification for audit-only.
+- `drift` misses concept drift (ok on 190/200) and catches score drift
+  (200/200). Label-free monitoring does not replace the audit sample.
+- Regression test with teeth:
+  `test_label_loop_restores_alpha_after_concept_drift` fails when the CRC
+  penalty is deleted (mean 0.0576 vs bar 0.0515).
 
 Done 2026-10-24 — published: public repo `github.com/ellisgeeker/DecisionOps`
 (SSH alias `github-ellisgeeker`), `main` + tag `v0.1.0`. History rewritten
@@ -470,7 +484,7 @@ in tree.
 
 ### Validation performed
 
-- **174 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **175 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
   which CI does not lint).
