@@ -11,6 +11,7 @@
 - `decisionops drift` — label-free monitor of certified rate and confidence
   (PSI + KS) vs a baseline decisions window; exit 0/1/2 for ok/watch/recertify_suggested.
 - Library: `run_recertification`, `run_drift_monitor`, `load_outcomes`, `load_decisions`.
+- Docs: `docs/shadow-mode.md` and `scripts/run_shadow_mode_demo.py` (BANKING77 walkthrough).
 
 ## 0.1.0 — 2026-10-24
 
@@ -51,7 +52,6 @@ generic HTTP (never sends the gold label; refuses redirects).
 
 ### Known limits
 
-- No shadow-mode guide yet (0.1.x).
 - Conditional (selective) risk and cascade thresholds are not certified.
 - Ordinal (Score) questions are not supported.
 - Validated on public benchmarks only (BANKING77, CLINC OOS), not production traffic.

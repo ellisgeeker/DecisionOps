@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-10-24 (drift monitor done; next is shadow-mode guide / remote push)
+**Last updated:** 2026-10-24 (shadow-mode guide done; next is remote push when repo is chosen)
 **Version:** 0.1.0 (tagged locally 2026-10-24; no remote yet, not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,9 +16,20 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: shadow-mode guide (docs), then remote push when the GitHub repo is
-chosen.** PyPI is undecided. Label loop core (audit → drift → recertify) is in
-place.
+**Next: remote push when the GitHub repo is chosen** (main + tag `v0.1.0`).
+PyPI is undecided. Label loop + shadow docs are in place.
+
+Done 2026-10-24 — shadow-mode guide (docs, 0.1.x):
+
+- [`docs/shadow-mode.md`](shadow-mode.md): why shadow/backfill labels, sample
+  floors, cutover checklist, CLI copy-paste for certify → decide → drift →
+  recertify.
+- `scripts/run_shadow_mode_demo.py`: offline BANKING77 walkthrough (default
+  writes `examples/banking77/shadow-demo/`). Smoke @800 rows, α=5%, ε=5%:
+  certificate feasible, 36 audit labels, drift `ok` on same-run split,
+  recertify feasible.
+- BANKING77 is a practice pack (all intents automatic in the demo contract),
+  not a production risk claim.
 
 Done 2026-10-24 — label-free drift monitor (0.1.x):
 
@@ -297,9 +308,9 @@ is dropped from the roadmap.
     1. ~~**Audit sampling in `decide()`**~~ — done 2026-10-23.
     2. ~~**Weighted-loss CRC**~~ — done 2026-10-23 (`contract.severity`).
     3. ~~**v0.1.0 release**~~ — done locally 2026-10-24; remote repo pending.
-    4. **0.1.x: closing the label loop** — ~~outcome feedback + `recertify`~~
-       and ~~drift monitor~~ done 2026-10-24; remaining: shadow-mode guide.
-       See *Label strategy*.
+    4. **0.1.x: closing the label loop** — ~~outcome feedback + `recertify`~~,
+       ~~drift monitor~~, ~~shadow-mode guide~~ done 2026-10-24. Open problems
+       (window vs staleness, low volume, IPW) remain. See *Label strategy*.
     The #7/#9/#10 bundle is the public demo after the release.
 
 ## Label strategy (decided 2026-09-27)
@@ -360,7 +371,7 @@ Work items:
 | ~~Outcome feedback format~~ | done 2026-10-24: `OutcomeFeedback`, `load_outcomes` | 0.1.x |
 | ~~`decisionops recertify`~~ | done 2026-10-24: audit-only CRC, profile diff | 0.1.x |
 | ~~Drift monitor~~ | done 2026-10-24: `decisionops drift`, PSI + KS | 0.1.x |
-| Shadow-mode guide | how to collect the first labels before go-live | docs, 0.1.x |
+| ~~Shadow-mode guide~~ | done 2026-10-24: `docs/shadow-mode.md` + demo script | docs, 0.1.x |
 
 ---
 

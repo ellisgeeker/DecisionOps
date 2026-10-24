@@ -69,7 +69,7 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | v0.1.0 release | done |
 | Feedback format + `recertify` from audit rows | done |
 | Label-free drift monitor | done |
-| Shadow-mode guide | next (0.1.x) |
+| Shadow-mode guide | done |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
@@ -425,6 +425,7 @@ CI runs on Python 3.12 and 3.13 (`.github/workflows/ci.yml`).
 
 ## Docs
 
+- [`docs/shadow-mode.md`](docs/shadow-mode.md) — first certificate before go-live (audit → drift → recertify), with a BANKING77 walkthrough
 - `decisionops-plan.md` — product plan
 - `decisionops-foundations.md` — theory notes
 

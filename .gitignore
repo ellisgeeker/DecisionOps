@@ -48,3 +48,5 @@ models/
 # Keep small toy/synthetic examples and non-JSONL summaries/reports.
 examples/banking77/**/*.jsonl
 examples/clinc_oos/**/*.jsonl
+# Local shadow-mode demo outputs
+examples/banking77/shadow-demo/
