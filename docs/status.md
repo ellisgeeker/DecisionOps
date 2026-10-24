@@ -1,7 +1,7 @@
 # Project status
 
-**Last updated:** 2026-10-24 (shadow-mode guide done; next is remote push when repo is chosen)
-**Version:** 0.1.0 (tagged locally 2026-10-24; no remote yet, not on PyPI)
+**Last updated:** 2026-10-24 (pushed to GitHub; next is measuring the label loop end to end)
+**Version:** 0.1.0 (tagged and pushed 2026-10-24; not on PyPI; recertify/drift/shadow unreleased on main)
 
 Where the project actually is, what to pick up next, and what is known to be
 incomplete. Written so it is usable after a gap of days or weeks.
@@ -16,8 +16,17 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: remote push when the GitHub repo is chosen** (main + tag `v0.1.0`).
-PyPI is undecided. Label loop + shadow docs are in place.
+**Next: measure the label loop end to end** — repeated simulated drift showing
+the old profile's true risk exceeds α and `recertify` on audit rows brings it
+back under α; record the numbers in findings.md. Then certified conditional
+(selective) risk or the code-review showcase pack.
+
+Done 2026-10-24 — published: public repo `github.com/ellisgeeker/DecisionOps`
+(SSH alias `github-ellisgeeker`), `main` + tag `v0.1.0`. History rewritten
+before the first push: author → `ellisgeeker`, `decisionops-plan.md` dropped
+(now gitignored, local only), local absolute paths made repo-relative (export
+scripts use `_rel()`). PyPI undecided. CI result not checked from here (`gh`
+not logged in); Python 3.12 suite passed locally.
 
 Done 2026-10-24 — shadow-mode guide (docs, 0.1.x):
 
