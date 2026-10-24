@@ -63,7 +63,7 @@ def test_eval_rejects_predictions_with_jev(tmp_path):
     assert "static" in result.output.lower()
 
 
-def test_provider_specific_flags_rejected_on_wrong_provider(tmp_path):
+def test_provider_specific_flags_rejected_on_wrong_provider(tmp_path, plain_output):
     dataset, predictions = _write_pair(tmp_path)
     cases = [
         ["--no-builtin-temperature"],
@@ -76,7 +76,7 @@ def test_provider_specific_flags_rejected_on_wrong_provider(tmp_path):
     for extra in cases:
         result = runner.invoke(app, ["eval", str(dataset), "-p", str(predictions), *extra])
         assert result.exit_code != 0, extra
-        assert "not valid with --provider static" in result.output, extra
+        assert "not valid with --provider static" in plain_output(result), extra
 
 
 def test_eval_runs_jev_with_contract_descriptions(tmp_path, monkeypatch):
@@ -182,11 +182,11 @@ def test_eval_runs_http_with_contract_descriptions(tmp_path, monkeypatch):
     assert seen["contract_instructions"] == "Pick."
 
 
-def test_http_requires_url(tmp_path):
+def test_http_requires_url(tmp_path, plain_output):
     dataset, _ = _write_pair(tmp_path)
     result = runner.invoke(app, ["eval", str(dataset), "--provider", "http"])
     assert result.exit_code != 0
-    assert "--http-url" in result.output
+    assert "--http-url" in plain_output(result)
 
 
 def test_eval_rejects_predictions_with_http(tmp_path):

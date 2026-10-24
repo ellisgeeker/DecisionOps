@@ -107,7 +107,7 @@ def test_compare_rejects_single_prediction_set(tmp_path):
     assert "at least two" in result.output.lower()
 
 
-def test_compare_rejects_bad_cal_ratio(tmp_path):
+def test_compare_rejects_bad_cal_ratio(tmp_path, plain_output):
     dataset, sharp, soft = _write_two_models(tmp_path, n=80)
 
     result = runner.invoke(
@@ -125,7 +125,7 @@ def test_compare_rejects_bad_cal_ratio(tmp_path):
     )
 
     assert result.exit_code != 0
-    assert "cal-ratio" in result.output.lower()
+    assert "cal-ratio" in plain_output(result).lower()
 
 
 def test_compare_applies_temperature_when_calibrate(tmp_path):
