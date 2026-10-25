@@ -28,7 +28,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 from scipy.stats import ks_2samp
 
-from decisionops.decide import CertificationProfile, Decision
+from decisionops.decide import CertificationProfile, Decision, require_single_profile
 
 DriftVerdict = Literal["ok", "watch", "recertify_suggested"]
 
@@ -185,6 +185,8 @@ def run_drift_monitor(
     is set, its `coverage_calibration` is attached as context and a note is added
     if the baseline certified rate disagrees with it substantially.
     """
+    if profile is not None:
+        profile = require_single_profile(profile, what="drift")
     if len(live) < min_window:
         raise ValueError(
             f"live window has {len(live)} decisions; need at least {min_window}"
@@ -193,6 +195,8 @@ def run_drift_monitor(
         raise ValueError(
             f"baseline window has {len(baseline)} decisions; need at least {min_window}"
         )
+    if profile is not None:
+        profile = require_single_profile(profile, what="drift")
 
     base_stats = window_stats(baseline)
     live_stats = window_stats(live)

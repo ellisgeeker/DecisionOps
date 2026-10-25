@@ -30,7 +30,7 @@ from decisionops.conformal.risk_control import (
     evaluate_certified_threshold,
 )
 from decisionops.contract import DecisionContract, auto_set_of
-from decisionops.decide import CertificationProfile, Decision
+from decisionops.decide import CertificationProfile, Decision, require_single_profile
 from decisionops.schemas import DecisionCase, DecisionPrediction, OutcomeFeedback
 
 RecertifyVerdict = Literal["replace", "keep", "infeasible"]
@@ -223,6 +223,7 @@ def run_recertification(
     `confidence_level` defaults to the profile's own guarantee. Temperature is
     never re-fit. Only `Decision.audit` rows enter the calibration set.
     """
+    profile = require_single_profile(profile, what="recertify")
     if contract is not None:
         profile.check_contract(contract)
     elif profile.contract is not None:

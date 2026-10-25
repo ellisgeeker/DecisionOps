@@ -5,16 +5,20 @@ from decisionops.cascade import CascadeReport, run_cascade
 from decisionops.conformal import (
     CertificationReport,
     CRCResult,
+    certify_cascade,
     certify_selective_threshold,
     certify_threshold,
     run_certification,
 )
 from decisionops.contract import DecisionContract, load_contract
 from decisionops.decide import (
+    CascadeProfile,
     CertificationProfile,
     Decision,
     ProfileMismatchError,
+    cascade_profile_from,
     decide,
+    decide_cascade,
     decide_many,
     load_profile,
     profile_from_report,
@@ -40,6 +44,7 @@ from decisionops.schemas import (
 
 __all__ = [
     "CRCResult",
+    "CascadeProfile",
     "CascadeReport",
     "CertificationProfile",
     "CertificationReport",
@@ -55,9 +60,12 @@ __all__ = [
     "RecertifyReport",
     "__version__",
     "align_cases_and_predictions",
+    "cascade_profile_from",
+    "certify_cascade",
     "certify_selective_threshold",
     "certify_threshold",
     "decide",
+    "decide_cascade",
     "decide_many",
     "evaluate",
     "load_contract",

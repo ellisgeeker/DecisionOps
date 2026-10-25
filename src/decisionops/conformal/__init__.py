@@ -1,5 +1,12 @@
 """Distribution-free risk control for selective prediction."""
 
+from decisionops.conformal.cascade_risk import (
+    CASCADE_QUANTITY,
+    CascadeCertificate,
+    certify_cascade,
+    measure_cascade,
+    min_cascade_calibration,
+)
 from decisionops.conformal.certify import (
     CertificationReport,
     CertifiedLevel,
@@ -19,13 +26,18 @@ from decisionops.conformal.risk_control import (
 )
 
 __all__ = [
+    "CASCADE_QUANTITY",
     "CRCResult",
+    "CascadeCertificate",
     "CertificationReport",
     "CertifiedLevel",
     "GuaranteeKind",
     "SELECTIVE_QUANTITY",
+    "certify_cascade",
     "certify_selective_threshold",
     "certify_threshold",
+    "measure_cascade",
+    "min_cascade_calibration",
     "clopper_pearson_upper",
     "evaluate_certified_threshold",
     "min_calibration_samples",

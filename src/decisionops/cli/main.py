@@ -22,6 +22,7 @@ from decisionops.decide import (
     decide_many,
     load_profile,
     profile_from_report,
+    require_single_profile,
     save_profile,
 )
 from decisionops.drift import run_drift_monitor
@@ -977,7 +978,7 @@ def decide_cmd(
     smoke for the runtime rule — the real consumer is the library `decide()`.
     """
     try:
-        frozen = load_profile(profile)
+        frozen = require_single_profile(load_profile(profile), what="decisionops decide")
         frozen.check_contract(_load_contract_option(contract))
         decisions = decide_many(load_predictions(predictions), frozen)
     except (ProfileMismatchError, ValueError) as exc:
@@ -1131,7 +1132,7 @@ def recertify_cmd(
     if confidence_level is not None and not 0.0 < confidence_level < 1.0:
         raise typer.BadParameter("--confidence-level must be in (0, 1)")
     try:
-        frozen = load_profile(profile)
+        frozen = require_single_profile(load_profile(profile), what="decisionops recertify")
         report = run_recertification(
             frozen,
             decisions=load_decisions(decisions),
@@ -1229,7 +1230,12 @@ def drift_cmd(
     if bins < 2:
         raise typer.BadParameter("--bins must be >= 2")
     try:
-        frozen = load_profile(profile) if profile is not None else None
+        loaded = load_profile(profile) if profile is not None else None
+        frozen = (
+            require_single_profile(loaded, what="decisionops drift")
+            if loaded is not None
+            else None
+        )
         report = run_drift_monitor(
             load_decisions(live),
             load_decisions(baseline),
