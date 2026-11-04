@@ -1,7 +1,7 @@
 # Project status
 
-**Last updated:** 2026-10-24 (certified selective risk done, findings §11; next is the showcase pack)
-**Version:** 0.1.1 (tagged and pushed 2026-10-24; not on PyPI)
+**Last updated:** 2026-11-04 (certified cascade CLI + BANKING77 measure, findings §12; next is Score / window rule, then showcase)
+**Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
 incomplete. Written so it is usable after a gap of days or weeks.
@@ -16,8 +16,26 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: the code-review showcase pack (#7/#9/#10)**, or certified cascade
-thresholds. PyPI is still undecided.
+**Next: Score (ordinal) risk design, or the audit-window / staleness rule.**
+Cascade cert path is in library + CLI; cascade `recertify`/`drift` still refuse.
+Showcase pack (#7/#9/#10) still waits. PyPI is still undecided.
+
+Done 2026-11-04 — certified two-stage cascade:
+
+- Library: `certify_cascade` (LTT on `(λ₁, λ₂)`, Bonferroni rows, fixed-sequence
+  `λ₂`), `CascadeProfile`, `decide_cascade` / `decide_cascade_many`.
+  `recertify` / `drift` / single-model `decide` refuse cascade profiles with a
+  clear error until that path exists.
+- CLI: `decisionops certify-cascade` (exactly two `-p`, per-stage temperature,
+  label-free quantile grids, optional `--stage-cost`, `--profile`);
+  `decide` accepts cascade profiles with two `-p` in stage order.
+  Empirical `cascade` stays the cost curve.
+- Measured on BANKING77 n=3076, cnb → char_lr, α=5%, HP 90%, 20 seeds
+  ([findings.md](findings.md) §12): cascade feasible 20/20, mean test automation
+  80.2%, joint error 2.80% (held every seed). char_lr alone 86.1% auto / 3.76%
+  joint — Bonferroni tax is real; cascade still doubles cnb alone (40%).
+  `scripts/measure_cascade_banking77.py` → `examples/banking77/cascade-cert-measure.json`.
+- Tests: analytic LTT violation rates + teeth, CLI round trip, test-split replay.
 
 Done 2026-10-24 — certified selective risk ([findings.md](findings.md) §11):
 
@@ -121,10 +139,12 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
    (drift simulation in `tests/test_recertify.py`).
 4b. ~~Label-free drift monitor~~ — done 2026-10-24 (`decisionops drift`).
 5. ~~Certified conditional (selective) risk via Learn-Then-Test~~ — done
-   2026-10-24 (`--risk selective`, findings §11). Remaining: certified
-   cascade thresholds (today the cascade curve is empirical, two-stage,
-   oracle-priced).
-6. Score (ordinal) risk design; the #7/#9/#10 showcase bundle.
+   2026-10-24 (`--risk selective`, findings §11). ~~Certified cascade
+   thresholds~~ — done 2026-11-04 (`certify-cascade`, findings §12). Remaining
+   on this line: cascade `recertify` / `drift` (currently refuse cascade
+   profiles on purpose).
+6. Score (ordinal) risk design; audit window vs staleness; then the #7/#9/#10
+   showcase bundle.
 
 Real-traffic validation follows the loop, so it tests the whole mechanism.
 Isotonic in CRC is **not** planned: it is monotone, so it does not reorder
@@ -439,8 +459,9 @@ Work items:
 | Conformal Risk Control | `conformal/` | Angelopoulos et al.; validated (see below) |
 | Model comparison | `compare.py` | Shared split; ranks by CRC-certified coverage; empirical `!` kept as contrast |
 | Decision contract | `contract.py` | Closed-set choices, auto-set, costs, severity (true-label miss weight), yes_choice; asymmetric + weighted risk for CRC/gate |
-| Offline cascade | `cascade.py` | Cost-saved vs joint miss-rate curve; oracle escalate pricing; needs contract costs |
-| Runtime decide | `decide.py` | `CertificationProfile` from a certify report; `decide()` → AUTO/ESCALATE; model + contract-hash guards |
+| Offline cascade | `cascade.py` | Cost-saved vs joint miss-rate curve; oracle escalate pricing; needs contract costs; thresholds empirical |
+| Certified cascade | `conformal/cascade_risk.py`, `cascade_certify.py` | Two-stage LTT `(λ₁, λ₂)`; `CascadeProfile` + `decide_cascade`; CLI `certify-cascade` |
+| Runtime decide | `decide.py` | Single-model `CertificationProfile` or cascade `CascadeProfile`; audit sample |
 | Reports | `report/` | Rich console + JSON + self-contained HTML (reliability, risk-coverage, cascade cost curve) |
 
 ### CLI commands
@@ -451,8 +472,9 @@ Work items:
 | `decisionops gate` | done — cal/test split; temperature + isotonic when `--calibrate`; `--provider static\|laya\|jev\|http` |
 | `decisionops compare` | done — shared split, CRC ranking, empirical table retained with `!`; offline JSONL only |
 | `decisionops certify` | done — CRC thresholds; `--provider static\|laya\|jev\|http`; `--profile` writes a runtime profile |
-| `decisionops cascade` | done — cost-saved vs miss-rate; requires `--contract` with costs |
-| `decisionops decide` | done — route a predictions JSONL with a profile; offline smoke |
+| `decisionops cascade` | done — cost-saved vs miss-rate; empirical thresholds; requires `--contract` with costs |
+| `decisionops certify-cascade` | done — two-stage LTT certificate; two `-p`; optional `--profile` |
+| `decisionops decide` | done — single-model or cascade profile (cascade needs two `-p`) |
 | `decisionops recertify` | done — audit-only CRC from decisions×outcomes×predictions; profile diff |
 
 Provider-specific flags (`--model-dir`, `--no-builtin-temperature`, `--jev-model`,
@@ -509,10 +531,9 @@ in tree.
 
 ### Validation performed
 
-- **175 tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
-  without torch). 87% coverage with `--extra dev --extra jev` (CI's setup),
-  ruff clean on `src tests` (four pre-existing errors in older `scripts/`,
-  which CI does not lint).
+- **214+ tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+  without torch). Coverage ≥85% with `--extra dev --extra jev` (CI's setup),
+  ruff clean on `src tests` (older `scripts/` not linted by CI).
 
 - CRC correctness is now a **regression test** (`tests/test_crc_analytic.py`):
   60 fresh pools, n_cal=150 so `B/(n+1)` is a visible share of α, `λ̂` compared
@@ -527,6 +548,9 @@ in tree.
   `n_crc_cal=120`): Jev @5% feasible 20/20, mean coverage 65.4%; Laya
   feasible 10/20, mean 8.6% when it exists. See [findings.md](findings.md) §8
   and `examples/banking77/compare-jev500/`.
+- Certified cascade on full BANKING77 (cnb → char_lr, 20 seeds): feasible 20/20,
+  mean test automation 80.2%, joint 2.80%. See [findings.md](findings.md) §12
+  and `examples/banking77/cascade-cert-measure.json`.
 - Isotonic gate contrast (toy smoke): ECE raw 0.085 → temperature 0.082 →
   isotonic 0.047; accuracy unchanged. Verdict still focuses on temperature.
 
@@ -536,6 +560,7 @@ in tree.
 
 See **Roadmap** above for the ordered work. Beyond it:
 
+- **Cascade `recertify` / `drift`** — profiles are refused on purpose until built.
 - **Fine-tune Laya and re-measure** — model research, not on the product path.
 - **Isotonic in `compare` / `certify`** — gate has the contrast; CRC still uses
   temperature only, intentional for V1.
@@ -544,4 +569,4 @@ See **Roadmap** above for the ordered work. Beyond it:
 
 M0 (git + Apache-2.0 LICENSE + GitHub Actions + 85% coverage gate) is done.
 Large regenerated HF JSONL packs are gitignored; rebuild with
-`scripts/prepare_hf_intent_gates.py`. Remote GitHub repo not created yet.
+`scripts/prepare_hf_intent_gates.py`. Public repo: `github.com/ellisgeeker/DecisionOps`.

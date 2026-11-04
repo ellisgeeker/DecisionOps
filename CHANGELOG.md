@@ -4,6 +4,14 @@
 
 ### Added
 
+- Certified two-stage cascade: `certify_cascade` / `run_cascade_certification`
+  (Learn-Then-Test on `(λ₁, λ₂)`), `CascadeProfile`, `decide_cascade`, CLI
+  `decisionops certify-cascade` and cascade-aware `decide` (two `-p`).
+  Empirical `cascade` is unchanged. `recertify` / `drift` refuse cascade
+  profiles until that path exists.
+- findings §12: BANKING77 cnb → char_lr, α=5%, HP 90%, 20 seeds — cascade
+  feasible 20/20, mean test automation 80.2%, joint error 2.80%; char_lr alone
+  86.1% / 3.76% (Bonferroni tax). `scripts/measure_cascade_banking77.py`.
 - `certify --risk selective` (`run_certification(risk="selective")`,
   `certify_selective_threshold`): certifies the error rate **among**
   auto-accepted cases with Learn-Then-Test, high-probability only, 0-1 loss.

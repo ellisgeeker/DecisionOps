@@ -64,6 +64,7 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | M0 git / Apache-2.0 / CI + 85% coverage gate | done |
 | Decision contract + asymmetric risk (`--contract`) | done |
 | Offline cascade / cost simulation (`cascade`) | done |
+| Certified two-stage cascade (`certify-cascade`) | done (unreleased) |
 | Certified profile + runtime `decide()` (`certify --profile`, `decide`) | done |
 | Generic HTTP decision provider (`--provider http`) | done |
 | High-probability certificates (`certify --confidence-level`) | done |
@@ -73,6 +74,8 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Label-free drift monitor (`drift`) | done (0.1.1) |
 | Shadow-mode guide | done (0.1.1) |
 | Label loop measured end to end (findings §10) | done (0.1.1) |
+| Certified selective risk (`certify --risk selective`) | done (unreleased) |
+| Certified two-stage cascade (findings §12) | done (unreleased) |
 | Thin gate + code review pack + escalate LLMs | later (showcase) |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
@@ -440,20 +443,38 @@ calibration rows. See [findings §11](docs/findings.md#11-certifying-the-error-r
 small (`α ≥ B/(n+1)` fails) or where no threshold holds `α` are reported
 **INFEASIBLE** rather than given a number.
 
-## Cascade (cost simulation)
+## Cascade
 
-How much does automation save, at what miss rate? `cascade` sweeps thresholds on the
-held-out split and reports cost saved against always escalating. It needs a contract
-with a cost for every choice:
+**Empirical cost curve** (`cascade`): how much does automation save, at what miss
+rate? Sweeps thresholds on the held-out split against always escalating. Needs a
+contract with a cost for every choice. Escalation is oracle-priced, so savings
+are optimistic:
 
 ```bash
 uv run decisionops cascade data.jsonl -p preds.jsonl \
   --contract examples/contracts/routing.json --output report/cascade
 ```
 
-The curve is **empirical** and escalation is priced with an oracle (the true escalate
-label's cost, else the cheapest escalate choice), so savings are optimistic. Pair it
-with `certify` for a CRC bound on the miss rate.
+**Certified two-stage thresholds** (`certify-cascade`): Learn-Then-Test on
+`(λ₁, λ₂)` for a cheap model then a mid model. High-probability only. Writes a
+`CascadeProfile` for `decide` (two `-p` files, stage order):
+
+```bash
+uv run decisionops certify-cascade examples/banking77/dataset.jsonl \
+  -p cnb=examples/banking77/providers/tfidf_cnb.jsonl \
+  -p char_lr=examples/banking77/providers/tfidf_char_lr.jsonl \
+  --contract path/to/contract.json --alpha 0.05 --profile cascade.json
+
+uv run decisionops decide cascade.json \
+  -p cnb=examples/banking77/providers/tfidf_cnb.jsonl \
+  -p char_lr=examples/banking77/providers/tfidf_char_lr.jsonl
+```
+
+On BANKING77 (cnb → char_lr, α=5%, HP 90%, 20 seeds) the cascade was feasible on
+every seed, mean test automation **80.2%**, joint error **2.80%**. The stronger
+head alone automated more (86%) under the same 90% level — the Bonferroni tax is
+real. See [findings §12](docs/findings.md#12-certified-two-stage-cascade-on-banking77-cnb--char_lr).
+`recertify` / `drift` do not accept cascade profiles yet.
 
 ## Comparison protocol
 

@@ -1,6 +1,6 @@
 # Findings
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-11-04
 
 Measured results, with the protocol and limits of each. Numbers here came from
 runs on public benchmarks; nothing is synthetic unless labelled so.
@@ -559,6 +559,61 @@ Two design points, both measured:
 
 Limits: one calibrated synthetic pool shape, binary, one automatic choice; 90%
 confidence only. Contract `severity` is rejected with `--risk selective`.
+
+---
+
+## 12. Certified two-stage cascade on BANKING77 (cnb → char_lr)
+
+**Measured 2026-11-04.** Empirical `cascade` only sweeps cost vs miss rate. The
+library path `certify-cascade` / `run_cascade_certification` certifies a pair
+`(λ₁, λ₂)` with Learn-Then-Test: Bonferroni across stage-1 rows, fixed-sequence
+scan of stage 2, high-probability only, 0-1 loss. Stage 1 auto-executes when it
+picks an automatic choice above `λ₁`; otherwise stage 2 may.
+
+Protocol:
+
+- Pack: BANKING77 held-out, **n=3076**, all 77 intents automatic (demo contract;
+  not a production auto/escalate split).
+- Stages: `tfidf_cnb` (cheap) then `tfidf_char_lr` (mid). Temperature fit per
+  stage on a slice disjoint from the LTT set; grids from that slice's
+  confidences (labels unused).
+- α=5%, confidence level 90%, 20 seeds, `cal_ratio=0.3` → mean `n_ltt_cal≈738`,
+  m=13 rows, per-row level ≈ 99.23%.
+- Contrast: each stage alone with the same α and 90% high-probability certificate
+  (the default a customer would use for a single model). Reproduce:
+
+```bash
+uv run python scripts/measure_cascade_banking77.py --reps 20
+# writes examples/banking77/cascade-cert-measure.json
+```
+
+| Rule | Feasible | Mean test automation | Mean test joint error | Bound held on test |
+|---|--:|--:|--:|--:|
+| Cascade LTT (cnb → char_lr) | 20/20 | **80.2%** | **2.80%** | 20/20 |
+| cnb alone (HP 90%) | 20/20 | 40.2% | 3.84% | — |
+| char_lr alone (HP 90%) | 20/20 | **86.1%** | 3.76% | — |
+
+What it shows:
+
+1. **The cascade certificate is usable on a real multi-class pack.** Feasible on
+   every seed; test joint error stayed ≤ α on every seed (mean 2.8% vs target 5%).
+   Both stages were used on every seed: mean autos on the test split ≈ 507 from
+   cnb and ≈ 1220 from char_lr (~65–74% of cascade autos come from stage 2).
+2. **Bonferroni is visible against the strong second stage alone.** char_lr alone
+   at the *same* 90% level automates more (86% vs 80%) with a higher mean joint
+   error (3.8% vs 2.8%). The cascade pays a coverage tax for scanning many `λ₁`
+   rows; that is expected, not a bug. Against the weak first stage alone, cascade
+   roughly doubles automation (40% → 80%).
+3. **Do not read this as "always cascade."** On this pack the second head is
+   already strong. Cascade still earns its keep when the cheap model can clear
+   easy mass and the mid model covers the rest under one joint bound — and when
+   stage call costs differ. With no `--stage-cost` the objective is automation
+   rate on calibration (optimistic); report test numbers for cost claims.
+
+Limits: one pack, two sklearn heads, all-auto demo contract (no escalate path,
+so no cost objective), 20 seeds, HP 90% only. Not a claim about Laya/Jev
+cascades or production routing contracts. Cascade `recertify` / `drift` are not
+built yet.
 
 ---
 
