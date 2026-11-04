@@ -49,6 +49,7 @@ from decisionops.conformal.risk_control import (
     clopper_pearson_upper,
     min_calibration_samples_hp,
 )
+from decisionops.schemas import DecisionCase, DecisionPrediction
 
 CASCADE_QUANTITY = "cascade_joint_automated_error_rate"
 Objective = Literal["cost", "automation"]
@@ -111,6 +112,31 @@ def cascade_routes(
     acc1 = _accept(s1.confidence, lambda1)
     acc2 = ~acc1 & _accept(s2.confidence, lambda2)
     return acc1, acc2
+
+
+def stage_arrays_from_pairs(
+    pairs: Sequence[tuple[DecisionCase, DecisionPrediction]],
+    *,
+    auto_choices: frozenset[str] | None,
+    path_costs: dict[str, float] | None = None,
+) -> StageArrays:
+    """
+    Build stage arrays from aligned (case, prediction) pairs.
+
+    Non-automatic predictions get confidence -inf so they never auto-execute.
+    `path_costs` is the contract cost of executing the predicted choice.
+    """
+    n = len(pairs)
+    conf = np.empty(n, dtype=np.float64)
+    wrong = np.empty(n, dtype=np.float64)
+    auto_cost = np.zeros(n, dtype=np.float64)
+    for i, (case, pred) in enumerate(pairs):
+        eligible = auto_choices is None or pred.prediction in auto_choices
+        conf[i] = pred.confidence if eligible else -np.inf
+        wrong[i] = 0.0 if pred.prediction == case.label else 1.0
+        if path_costs is not None:
+            auto_cost[i] = float(path_costs.get(pred.prediction, 0.0))
+    return StageArrays(confidence=conf, wrong=wrong, auto_cost=auto_cost)
 
 
 class CascadePoint(BaseModel):

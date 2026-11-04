@@ -6,10 +6,12 @@ import json
 from pathlib import Path
 
 from decisionops.cascade import CascadeReport
+from decisionops.conformal.cascade_certify import CascadeCertificationReport
 from decisionops.conformal.certify import CertificationReport
 from decisionops.drift import DriftReport
 from decisionops.recertify import RecertifyReport
 from decisionops.report.console import (
+    print_cascade_certification_report,
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
@@ -29,6 +31,7 @@ def write_json_report(
         | ComparisonReport
         | CertificationReport
         | CascadeReport
+        | CascadeCertificationReport
         | RecertifyReport
         | DriftReport
     ),
@@ -43,6 +46,7 @@ def write_json_report(
 
 __all__ = [
     "print_cascade_report",
+    "print_cascade_certification_report",
     "print_certification_report",
     "print_comparison_report",
     "print_eval_report",

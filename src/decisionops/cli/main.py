@@ -1,4 +1,4 @@
-"""CLI entrypoint: eval | gate | compare | certify | cascade | decide | recertify | drift."""
+"""CLI: eval, gate, compare, certify, cascade, certify-cascade, decide, recertify, drift."""
 
 from __future__ import annotations
 
@@ -15,10 +15,14 @@ from decisionops import __version__
 from decisionops.adapters import StaticFileProvider
 from decisionops.cascade import run_cascade
 from decisionops.compare import compare_models, load_prediction_sets
+from decisionops.conformal.cascade_certify import run_cascade_certification
 from decisionops.conformal.certify import run_certification
 from decisionops.contract import DecisionContract, load_contract
 from decisionops.decide import (
+    CascadeProfile,
     ProfileMismatchError,
+    cascade_profile_from_report,
+    decide_cascade_many,
     decide_many,
     load_profile,
     profile_from_report,
@@ -35,6 +39,7 @@ from decisionops.io import (
 )
 from decisionops.recertify import run_recertification
 from decisionops.report import (
+    print_cascade_certification_report,
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
@@ -898,7 +903,7 @@ def cascade_cmd(
 
     Needs a contract with costs. Escalation is priced with an oracle (true
     escalate label, else cheapest escalate choice). Thresholds are empirical —
-    pair with `certify` for a CRC bound on the miss rate.
+    pair with `certify-cascade` for a certified bound on the miss rate.
     """
     if not 0.0 < cal_ratio < 1.0:
         raise typer.BadParameter("--cal-ratio must be in (0, 1)")
@@ -936,24 +941,203 @@ def cascade_cmd(
         _write_reports(report, output, "cascade_report")
 
 
+@app.command("certify-cascade")
+def certify_cascade_cmd(
+    dataset: Annotated[
+        Path,
+        typer.Argument(help="Path to labeled dataset JSONL.", exists=True, dir_okay=False),
+    ],
+    predictions: Annotated[
+        list[str],
+        typer.Option(
+            "--predictions",
+            "-p",
+            help="Exactly two, in stage order: cheap=preds.jsonl then mid=preds.jsonl.",
+        ),
+    ],
+    contract: Annotated[
+        Path,
+        typer.Option(
+            "--contract",
+            help="Decision contract JSON. Only auto_choices count as risk.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Directory for the JSON report."),
+    ] = None,
+    alpha: Annotated[
+        float,
+        typer.Option("--alpha", help="Target joint automated error rate."),
+    ] = 0.05,
+    confidence_level: Annotated[
+        float,
+        typer.Option(
+            "--confidence-level",
+            help="High-probability level (1 - delta). Cascade is HP only.",
+        ),
+    ] = 0.9,
+    cal_ratio: Annotated[
+        float,
+        typer.Option("--cal-ratio", help="Fraction of data used for calibration."),
+    ] = 0.3,
+    seed: Annotated[
+        int,
+        typer.Option("--seed", help="Split seed (shared across stages)."),
+    ] = 42,
+    calibrate: Annotated[
+        bool,
+        typer.Option("--calibrate/--no-calibrate", help="Fit temperature per stage."),
+    ] = True,
+    temp_ratio: Annotated[
+        float,
+        typer.Option(
+            "--temp-ratio",
+            help="Share of the calibration pool carved out to fit temperature "
+            "(LTT set is never used for the fit).",
+        ),
+    ] = 0.2,
+    grid_size: Annotated[
+        int,
+        typer.Option("--grid-size", help="Quantile grid size per stage (plus 'off')."),
+    ] = 12,
+    stage_cost: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--stage-cost",
+            help="Repeatable name=cost for a model call, matching -p names.",
+        ),
+    ] = None,
+    profile: Annotated[
+        Path | None,
+        typer.Option("--profile", help="Write a CascadeProfile JSON when feasible."),
+    ] = None,
+    audit_rate: Annotated[
+        float,
+        typer.Option("--audit-rate", help="Audit fraction stored on the profile."),
+    ] = 0.0,
+    audit_seed: Annotated[
+        int,
+        typer.Option("--audit-seed", help="Salt for the audit draw."),
+    ] = 0,
+) -> None:
+    """
+    Certify two-stage cascade thresholds (Learn-Then-Test).
+
+    Stage 1 auto-executes if it picks an automatic choice above lambda1;
+    otherwise stage 2 may. The bound is on the joint automated error rate,
+    high-probability only. Empirical `cascade` is unchanged.
+    """
+    if len(predictions) != 2:
+        raise typer.BadParameter("provide exactly two --predictions (stage 1 then stage 2)")
+    if not 0.0 < alpha < 1.0:
+        raise typer.BadParameter("--alpha must be in (0, 1)")
+    if not 0.0 < confidence_level < 1.0:
+        raise typer.BadParameter("--confidence-level must be in (0, 1)")
+    if not 0.0 < cal_ratio < 1.0:
+        raise typer.BadParameter("--cal-ratio must be in (0, 1)")
+    if not 0.0 <= temp_ratio < 1.0:
+        raise typer.BadParameter("--temp-ratio must be in [0, 1)")
+    if grid_size < 1:
+        raise typer.BadParameter("--grid-size must be >= 1")
+    if not 0.0 <= audit_rate < 1.0:
+        raise typer.BadParameter("--audit-rate must be in [0, 1)")
+    if profile is None and (audit_rate != 0.0 or audit_seed != 0):
+        raise typer.BadParameter("--audit-rate / --audit-seed need --profile")
+
+    try:
+        sets = load_prediction_sets(list(predictions))
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    names = tuple(sets.keys())
+    costs: tuple[float, float] | None = None
+    if stage_cost:
+        parsed: dict[str, float] = {}
+        for raw in stage_cost:
+            if "=" not in raw:
+                raise typer.BadParameter(f"--stage-cost expects name=value, got {raw!r}")
+            name, _, val = raw.partition("=")
+            name = name.strip()
+            if name in parsed:
+                raise typer.BadParameter(f"duplicate --stage-cost {name!r}")
+            try:
+                parsed[name] = float(val)
+            except ValueError as exc:
+                raise typer.BadParameter(f"invalid --stage-cost {raw!r}") from exc
+        missing = [n for n in names if n not in parsed]
+        extra = sorted(set(parsed) - set(names))
+        if missing or extra:
+            raise typer.BadParameter(
+                "--stage-cost names must match --predictions names "
+                f"(need {list(names)}, got {sorted(parsed)})"
+            )
+        costs = (parsed[names[0]], parsed[names[1]])
+
+    decision_contract = _load_contract_option(contract)
+    if decision_contract is None:
+        raise typer.BadParameter("--contract is required")
+    cases = load_dataset(dataset)
+    try:
+        report = run_cascade_certification(
+            cases,
+            sets[names[0]],
+            sets[names[1]],
+            decision_contract,
+            stage_names=names,
+            alpha=alpha,
+            cal_ratio=cal_ratio,
+            temp_ratio=temp_ratio,
+            seed=seed,
+            calibrate=calibrate,
+            confidence_level=confidence_level,
+            grid_size=grid_size,
+            stage_costs=costs,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    print_cascade_certification_report(report, console=console)
+
+    if output is not None:
+        output.mkdir(parents=True, exist_ok=True)
+        path = write_json_report(report, output / "cascade_certification_report.json")
+        console.print(f"[green]Wrote[/green] {path}")
+
+    if profile is not None:
+        if not report.certificate.feasible:
+            console.print("[red]No profile written:[/red] cascade certificate is infeasible.")
+            raise typer.Exit(code=1)
+        frozen = cascade_profile_from_report(
+            report, audit_rate=audit_rate, audit_seed=audit_seed
+        )
+        path = save_profile(frozen, profile)
+        lam1 = "off" if frozen.stages[0].threshold is None else f"{frozen.stages[0].threshold:.4f}"
+        lam2 = "off" if frozen.stages[1].threshold is None else f"{frozen.stages[1].threshold:.4f}"
+        console.print(
+            f"[green]Wrote[/green] {path}  "
+            f"(alpha={frozen.alpha:g}, lambda1={lam1}, lambda2={lam2}, "
+            f"audit_rate={frozen.audit_rate:g}, profile={frozen.profile_hash})"
+        )
+
+
 @app.command("decide")
 def decide_cmd(
     profile: Annotated[
         Path,
         typer.Argument(
-            help="CertificationProfile JSON from `certify --profile`.",
+            help="Profile JSON from `certify --profile` or `certify-cascade --profile`.",
             exists=True,
             dir_okay=False,
         ),
     ],
     predictions: Annotated[
-        Path,
+        list[str],
         typer.Option(
             "--predictions",
             "-p",
-            help="Predictions JSONL to route (raw probabilities; T is applied here).",
-            exists=True,
-            dir_okay=False,
+            help="Predictions JSONL (raw probabilities; T is applied here). "
+            "Cascade profiles need two, in stage order.",
         ),
     ],
     contract: Annotated[
@@ -973,15 +1157,27 @@ def decide_cmd(
     """
     Route predictions with a certified profile: AUTO or ESCALATE.
 
-    AUTO only when the predicted choice is automatic and calibrated confidence
-    is at or above the certified threshold; everything else escalates. Offline
-    smoke for the runtime rule — the real consumer is the library `decide()`.
+    Single-model: one -p. Cascade: two -p (stage 1 then stage 2). AUTO only
+    when an automatic choice is at or above the certified threshold.
     """
     try:
-        frozen = require_single_profile(load_profile(profile), what="decisionops decide")
-        frozen.check_contract(_load_contract_option(contract))
-        decisions = decide_many(load_predictions(predictions), frozen)
-    except (ProfileMismatchError, ValueError) as exc:
+        loaded = load_profile(profile)
+        loaded.check_contract(_load_contract_option(contract))
+        if isinstance(loaded, CascadeProfile):
+            if len(predictions) != 2:
+                raise ValueError("cascade profile needs exactly two --predictions")
+            sets = load_prediction_sets(list(predictions))
+            names = tuple(sets.keys())
+            decisions = decide_cascade_many(sets[names[0]], loaded, sets[names[1]])
+        else:
+            frozen = require_single_profile(loaded, what="decisionops decide")
+            if len(predictions) != 1:
+                raise ValueError("single-model profile needs exactly one --predictions")
+            spec = predictions[0]
+            path = Path(spec.partition("=")[2] if "=" in spec else spec)
+            decisions = decide_many(load_predictions(path), frozen)
+            loaded = frozen
+    except (ProfileMismatchError, ValueError, FileNotFoundError) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
     n = len(decisions)
@@ -990,37 +1186,63 @@ def decide_cmd(
     id_counts = Counter(d.id for d in decisions)
     duplicated = sorted(i for i, c in id_counts.items() if c > 1)
     by_reason: dict[str, int] = {}
+    by_stage: dict[str, int] = {}
     for d in decisions:
         by_reason[d.reason] = by_reason.get(d.reason, 0) + 1
+        if d.stage is not None:
+            by_stage[str(d.stage)] = by_stage.get(str(d.stage), 0) + 1
 
     console.print()
     console.rule("[bold]DecisionOps Decide[/bold]")
+    if isinstance(loaded, CascadeProfile):
+        s1, s2 = loaded.stages
+        lam = (
+            f"lambda1={'off' if s1.threshold is None else f'{s1.threshold:.4f}'}  "
+            f"lambda2={'off' if s2.threshold is None else f'{s2.threshold:.4f}'}"
+        )
+        console.print(f"profile={loaded.profile_hash}  alpha={loaded.alpha:g}  {lam}")
+    else:
+        console.print(
+            f"profile={loaded.profile_hash}  alpha={loaded.alpha:g}  "
+            f"threshold={loaded.threshold:.4f}  "
+            + (
+                f"T={loaded.temperature:.4f}"
+                if loaded.temperature is not None
+                else "T=none"
+            )
+        )
     console.print(
-        f"profile={frozen.profile_hash}  alpha={frozen.alpha:g}  "
-        f"threshold={frozen.threshold:.4f}  "
-        + (f"T={frozen.temperature:.4f}" if frozen.temperature is not None else "T=none")
-    )
-    console.print(
-        f"guarantee={frozen.guarantee}"
+        f"guarantee={loaded.guarantee}"
         + (
-            f" (confidence_level={frozen.confidence_level:g})"
-            if frozen.confidence_level is not None
+            f" (confidence_level={loaded.confidence_level:g})"
+            if loaded.confidence_level is not None
             else ""
         )
     )
-    if frozen.model or frozen.provider:
+    if isinstance(loaded, CascadeProfile):
+        for i, st in enumerate(loaded.stages, start=1):
+            console.print(
+                f"stage {i}: "
+                + (f"provider={st.provider}  " if st.provider else "")
+                + (f"model={st.model}" if st.model else "")
+            )
+        if by_stage:
+            console.print(
+                "stages  " + "  ".join(f"{k}={v}" for k, v in sorted(by_stage.items()))
+            )
+    elif loaded.model or loaded.provider:
         console.print(
-            (f"provider={frozen.provider}  " if frozen.provider else "")
-            + (f"model={frozen.model}" if frozen.model else "")
+            (f"provider={loaded.provider}  " if loaded.provider else "")
+            + (f"model={loaded.model}" if loaded.model else "")
         )
     console.print(
         f"n={n}  auto={n_auto} ({n_auto / n:.1%})  escalate={n - n_auto}  "
         + "  ".join(f"{k}={v}" for k, v in sorted(by_reason.items()))
     )
-    if frozen.audit_rate > 0.0:
+    if loaded.audit_rate > 0.0:
         console.print(
             f"audit sample: {n_audit} ({n_audit / n:.1%}) at audit_rate="
-            f"{frozen.audit_rate:g}, seed={frozen.audit_seed}; recertify on audit=true rows"
+            f"{loaded.audit_rate:g}, seed={loaded.audit_seed}; recertify on audit=true rows"
         )
     if duplicated:
         # The audit draw keys on id, so repeated ids share one draw: fine for

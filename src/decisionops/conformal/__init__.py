@@ -1,5 +1,9 @@
 """Distribution-free risk control for selective prediction."""
 
+from decisionops.conformal.cascade_certify import (
+    CascadeCertificationReport,
+    run_cascade_certification,
+)
 from decisionops.conformal.cascade_risk import (
     CASCADE_QUANTITY,
     CascadeCertificate,
@@ -29,6 +33,7 @@ __all__ = [
     "CASCADE_QUANTITY",
     "CRCResult",
     "CascadeCertificate",
+    "CascadeCertificationReport",
     "CertificationReport",
     "CertifiedLevel",
     "GuaranteeKind",
@@ -43,5 +48,6 @@ __all__ = [
     "min_calibration_samples",
     "min_calibration_samples_hp",
     "min_selective_accepted",
+    "run_cascade_certification",
     "run_certification",
 ]

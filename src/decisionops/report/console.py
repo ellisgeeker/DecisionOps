@@ -547,6 +547,68 @@ def print_cascade_report(report: CascadeReport, console: Console | None = None) 
     console.print()
 
 
+def print_cascade_certification_report(report, console: Console | None = None) -> None:
+    """Print a two-stage Learn-Then-Test cascade certificate."""
+    console = console or Console()
+    cert = report.certificate
+    console.print()
+    console.rule("[bold]DecisionOps Cascade Certification[/bold]")
+    console.print(
+        f"n_total={report.split.n_total}  "
+        f"n_ltt_cal={report.split.n_calibration}  "
+        f"n_test={report.split.n_test}  "
+        f"cal_ratio={report.split.cal_ratio:.2f}  "
+        f"seed={report.split.seed}"
+    )
+    for stage in report.stages:
+        t = f"T={stage.temperature:.4f}" if stage.temperature is not None else "T=none"
+        console.print(
+            f"stage {stage.name}: "
+            + (f"provider={stage.provider}  " if stage.provider else "")
+            + (f"model={stage.model}  " if stage.model else "")
+            + t
+        )
+    console.print(
+        f"guarantee: [bold]high-probability[/bold] — P(cascade joint error <= alpha) "
+        f">= {cert.confidence_level:.0%} over the calibration draw "
+        f"(Learn-Then-Test, {cert.n_rows} Bonferroni rows)"
+    )
+    console.print()
+
+    table = Table(title="Certified cascade point", show_header=True, header_style="bold")
+    table.add_column("Field")
+    table.add_column("Value", justify="right")
+    table.add_row("Target alpha", f"{cert.alpha:.2%}")
+    table.add_row("Certified", "[green]yes[/green]" if cert.feasible else "[red]INFEASIBLE[/red]")
+    if cert.feasible:
+        table.add_row("lambda1 (stage 1)", "off" if cert.lambda1 is None else f"{cert.lambda1:.4f}")
+        table.add_row("lambda2 (stage 2)", "off" if cert.lambda2 is None else f"{cert.lambda2:.4f}")
+        cal = cert.calibration
+        if cal is not None:
+            table.add_row(
+                "Upper bound (cal)",
+                "—" if cal.upper_bound is None else f"{cal.upper_bound:.4f}",
+            )
+            table.add_row("Coverage (cal)", f"{cal.automation_rate:.1%}")
+            table.add_row(
+                "Auto stage1 / stage2",
+                f"{cal.n_auto_stage1} / {cal.n_auto_stage2}",
+            )
+        if report.test is not None:
+            table.add_row("Joint error (test)", f"{report.test.joint_error_rate:.4f}")
+            table.add_row("Coverage (test)", f"{report.test.automation_rate:.1%}")
+            held = report.bound_held_on_test
+            table.add_row(
+                "Bound held on test",
+                "yes" if held else ("no" if held is False else "—"),
+            )
+    table.add_row("n_cal / min_n", f"{cert.n_calibration} / {cert.min_n_required}")
+    console.print(table)
+    for note in report.notes:
+        console.print(f"• {escape(str(note))}")
+    console.print()
+
+
 def print_recertify_report(report, console: Console | None = None) -> None:
     """Print an audit-only recertification diff."""
     console = console or Console()

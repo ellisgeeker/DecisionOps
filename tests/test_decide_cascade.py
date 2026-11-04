@@ -270,7 +270,7 @@ def test_recertify_and_drift_refuse_cascade():
         run_drift_monitor([], [], profile=p)  # type: ignore[arg-type]
 
 
-def test_cli_decide_refuses_cascade_profile(tmp_path):
+def test_cli_decide_needs_two_prediction_files_for_cascade(tmp_path):
     path = save_profile(_profile(), tmp_path / "c.json")
     preds = tmp_path / "p.jsonl"
     preds.write_text(

@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from decisionops.__version__ import __version__
 from decisionops.calibration.temperature import apply_temperature
+from decisionops.conformal.cascade_certify import CascadeCertificationReport
 from decisionops.conformal.cascade_risk import CASCADE_QUANTITY, CascadeCertificate
 from decisionops.conformal.certify import CertificationReport
 from decisionops.conformal.risk_control import GuaranteeKind
@@ -167,7 +168,7 @@ class CascadeProfile(BaseModel):
     objective: str = "automation"
     crc_bound_value: float | None = None
     coverage_calibration: float | None = None
-    test: dict[str, float | int] | None = None
+    test: dict[str, Any] | None = None
     split: dict[str, Any] = Field(default_factory=dict)
     decisionops_version: str = __version__
 
@@ -387,7 +388,7 @@ def cascade_profile_from(
     contract: DecisionContract | None = None,
     audit_rate: float = 0.0,
     audit_seed: int = 0,
-    test: dict[str, float | int] | None = None,
+    test: dict[str, Any] | None = None,
     split: dict[str, Any] | None = None,
 ) -> CascadeProfile:
     """Freeze a feasible cascade certificate into a runtime profile."""
@@ -499,6 +500,45 @@ def decide_cascade(
         stage=would_stage,
         audit=audit,
         profile=tag,
+    )
+
+
+def decide_cascade_many(
+    stage1: list[DecisionPrediction],
+    profile: CascadeProfile,
+    stage2: list[DecisionPrediction],
+) -> list[Decision]:
+    """Route many cases; stage-2 rows are looked up by id only when needed."""
+    by_id = {p.id: p for p in stage2}
+    if len(by_id) != len(stage2):
+        raise ValueError("duplicate stage-2 prediction ids")
+    tag = profile.profile_hash
+    return [
+        decide_cascade(p1, profile, stage2=by_id.get(p1.id), profile_hash=tag)
+        for p1 in stage1
+    ]
+
+
+def cascade_profile_from_report(
+    report: CascadeCertificationReport,
+    *,
+    audit_rate: float = 0.0,
+    audit_seed: int = 0,
+) -> CascadeProfile:
+    """Freeze a `CascadeCertificationReport` into a runtime profile."""
+    contract_raw = (report.metadata or {}).get("contract")
+    contract = DecisionContract.model_validate(contract_raw) if contract_raw else None
+    s1, s2 = report.stages
+    test = report.test.model_dump(mode="json") if report.test is not None else None
+    return cascade_profile_from(
+        report.certificate,
+        CascadeStage(provider=s1.provider, model=s1.model, temperature=s1.temperature),
+        CascadeStage(provider=s2.provider, model=s2.model, temperature=s2.temperature),
+        contract=contract,
+        audit_rate=audit_rate,
+        audit_seed=audit_seed,
+        test=test,
+        split=report.split.model_dump(mode="json"),
     )
 
 
