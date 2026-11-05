@@ -12,6 +12,7 @@ from decisionops.drift import DriftReport
 from decisionops.recertify import RecertifyReport
 from decisionops.report.console import (
     print_cascade_certification_report,
+    print_cascade_recertify_report,
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
@@ -52,6 +53,7 @@ __all__ = [
     "print_eval_report",
     "print_drift_report",
     "print_gate_report",
+    "print_cascade_recertify_report",
     "print_recertify_report",
     "write_html_report",
     "write_json_report",

@@ -474,7 +474,11 @@ On BANKING77 (cnb → char_lr, α=5%, HP 90%, 20 seeds) the cascade was feasible
 every seed, mean test automation **80.2%**, joint error **2.80%**. The stronger
 head alone automated more (86%) under the same 90% level — the Bonferroni tax is
 real. See [findings §12](docs/findings.md#12-certified-two-stage-cascade-on-banking77-cnb--char_lr).
-`recertify` / `drift` do not accept cascade profiles yet.
+`recertify` accepts a cascade profile with two `-p` in stage order: it re-runs
+the two-stage LTT on audit rows with frozen T₁/T₂ and the profile's own grids.
+It needs roughly twice the audit labels of a single model
+([findings §13](docs/findings.md#13-cascade-recertify-restores-α-after-drift-but-needs-more-audit-labels)).
+`drift` does not accept cascade profiles yet.
 
 ## Comparison protocol
 

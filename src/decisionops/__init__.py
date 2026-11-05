@@ -36,7 +36,12 @@ from decisionops.io import (
     load_outcomes,
     load_predictions,
 )
-from decisionops.recertify import RecertifyReport, run_recertification
+from decisionops.recertify import (
+    CascadeRecertifyReport,
+    RecertifyReport,
+    run_cascade_recertification,
+    run_recertification,
+)
 from decisionops.schemas import (
     DecisionCase,
     DecisionPrediction,
@@ -48,6 +53,7 @@ from decisionops.schemas import (
 __all__ = [
     "CRCResult",
     "CascadeProfile",
+    "CascadeRecertifyReport",
     "CascadeReport",
     "CertificationProfile",
     "CertificationReport",
@@ -85,6 +91,7 @@ __all__ = [
     "run_drift_monitor",
     "run_certification",
     "run_gate",
+    "run_cascade_recertification",
     "run_recertification",
     "save_profile",
 ]

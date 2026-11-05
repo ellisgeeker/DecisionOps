@@ -166,6 +166,16 @@ class CascadeProfile(BaseModel):
     n_rows: int | None = None
     per_row_level: float | None = None
     objective: str = "automation"
+    stage_costs: list[float] | None = None
+    """Per-call cost of (M1, M2) when the cost objective was used; reused by recertify."""
+
+    lambda1_grid: list[float] | None = None
+    lambda2_grid: list[float] | None = None
+    """
+    Threshold grids the certificate was tested on, fixed before its labels were
+    seen. Recertify reuses them so its hypotheses do not depend on audit labels.
+    """
+
     crc_bound_value: float | None = None
     coverage_calibration: float | None = None
     test: dict[str, Any] | None = None
@@ -206,7 +216,7 @@ def require_single_profile(profile: AnyProfile, *, what: str) -> CertificationPr
     if isinstance(profile, CascadeProfile):
         raise ValueError(
             f"{what} does not support cascade profiles yet; "
-            "route with decide_cascade() and recertify a single-model profile"
+            "route with decide_cascade() and recertify with run_cascade_recertification()"
         )
     return profile
 
@@ -390,6 +400,7 @@ def cascade_profile_from(
     audit_seed: int = 0,
     test: dict[str, Any] | None = None,
     split: dict[str, Any] | None = None,
+    stage_costs: tuple[float, float] | list[float] | None = None,
 ) -> CascadeProfile:
     """Freeze a feasible cascade certificate into a runtime profile."""
     if not cert.feasible:
@@ -412,6 +423,9 @@ def cascade_profile_from(
         n_rows=cert.n_rows,
         per_row_level=cert.per_row_level,
         objective=cert.objective,
+        stage_costs=list(stage_costs) if stage_costs is not None else None,
+        lambda1_grid=list(cert.lambda1_grid),
+        lambda2_grid=list(cert.lambda2_grid),
         crc_bound_value=cert.calibration.upper_bound if cert.calibration else None,
         coverage_calibration=(
             cert.calibration.automation_rate if cert.calibration else None
@@ -539,6 +553,7 @@ def cascade_profile_from_report(
         audit_seed=audit_seed,
         test=test,
         split=report.split.model_dump(mode="json"),
+        stage_costs=(report.metadata or {}).get("stage_costs"),
     )
 
 

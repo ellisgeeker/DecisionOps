@@ -1,6 +1,6 @@
 # Findings
 
-**Last updated:** 2026-11-04
+**Last updated:** 2026-11-05
 
 Measured results, with the protocol and limits of each. Numbers here came from
 runs on public benchmarks; nothing is synthetic unless labelled so.
@@ -612,8 +612,56 @@ What it shows:
 
 Limits: one pack, two sklearn heads, all-auto demo contract (no escalate path,
 so no cost objective), 20 seeds, HP 90% only. Not a claim about Laya/Jev
-cascades or production routing contracts. Cascade `recertify` / `drift` are not
-built yet.
+cascades or production routing contracts. Cascade `recertify` is measured in
+§13; cascade `drift` is not built yet.
+
+## 13. Cascade recertify restores α after drift, but needs more audit labels
+
+**Measured 2026-11-05.** The cascade counterpart of §10: certify a two-stage
+cascade, drift, route the drifted traffic with the old profile, recertify on
+audit labels only.
+
+Setup (`scripts/measure_cascade_label_loop.py`, 200 reps, α=5%, HP 90%).
+Certify on 3000 pre-drift cases (half for LTT, no temperature), then concept
+drift: both stages lose 10 points of accuracy at every confidence. Route 3000
+drifted cases at audit rate ε and run `recertify` on the audit rows. Stage
+confidences are `U(0.55, 0.999)` and `U(0.70, 0.999)`, independent, with
+`P(correct | c) = c − δ`, so **true joint risk is closed form** (checked against
+200k Monte Carlo draws to within 0.0005).
+
+| | mean true joint error | share above α | verdicts |
+|---|--:|--:|---|
+| pre-drift, old (λ₁, λ₂) | 0.033 | 0% | — |
+| **after drift, old (λ₁, λ₂)** | **0.084** | **100%** | — |
+| recertify, ε=5% (n≈150) | 0.030 | 13% (4/31) | replace 31, infeasible 169 |
+| recertify, ε=10% (n≈300) | 0.026 | 0% (0/93) | replace 93, infeasible 107 |
+| recertify, ε=20% (n≈600) | 0.026 | 1% (2/176) | replace 176, infeasible 24 |
+
+Recertified calibration automation is 18–19% at every ε.
+
+What it shows:
+
+1. **Drift breaks a cascade certificate the same way.** Every rep lands above α
+   (0.033 → 0.084).
+2. **Whenever recertify replaces, risk comes back under α.** Every one of the
+   300 `replace` verdicts lowered true risk versus the old point. Across all ε, 6 of 300 replaced profiles sit above α
+   (2%), well inside the 10% budget. The 4/31 at ε=5% is a small, selected
+   denominator: those are the reps whose audit sample happened to look good
+   enough to pass.
+3. **The cascade needs about twice the audit labels of a single model.** At
+   ε=5% (≈150 labels) recertify is infeasible on 85% of reps; §10's
+   single-model HP recertify was feasible on 200/200 at the same ε. The Bonferroni split over 13 λ₁
+   rows lifts the zero-error floor from 45 to 95 at α=5% / 90% (§12). Under drift
+   errors are not zero, so the real requirement is higher still. ~300 labels
+   was feasible on about half the reps, ~600 on 88%.
+4. **`infeasible` is the honest answer when labels are short.** It never
+   reported `keep` on a broken profile; the operator is told the live profile
+   may no longer hold α.
+
+Limits: synthetic, independent stages, one drift shape (concept, both stages
+equally), HP 90% only, all-auto contract. Score drift and correlated stages are
+not measured. The ~2× label cost is specific to this grid size (m=13); a
+smaller grid lowers it at the price of a coarser operating point.
 
 ---
 

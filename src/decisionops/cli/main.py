@@ -37,9 +37,14 @@ from decisionops.io import (
     load_outcomes,
     load_predictions,
 )
-from decisionops.recertify import run_recertification
+from decisionops.recertify import (
+    CascadeRecertifyReport,
+    run_cascade_recertification,
+    run_recertification,
+)
 from decisionops.report import (
     print_cascade_certification_report,
+    print_cascade_recertify_report,
     print_cascade_report,
     print_certification_report,
     print_comparison_report,
@@ -1268,7 +1273,7 @@ def recertify_cmd(
     profile: Annotated[
         Path,
         typer.Argument(
-            help="Current CertificationProfile JSON to re-check.",
+            help="Current profile JSON to re-check (single-model or cascade).",
             exists=True,
             dir_okay=False,
         ),
@@ -1292,13 +1297,12 @@ def recertify_cmd(
         ),
     ],
     predictions: Annotated[
-        Path,
+        list[str],
         typer.Option(
             "--predictions",
             "-p",
-            help="Raw predictions JSONL for the same ids (T is applied from the profile).",
-            exists=True,
-            dir_okay=False,
+            help="Raw predictions JSONL for the same ids (T is applied from the profile). "
+            "Cascade profiles need two, in stage order.",
         ),
     ],
     contract: Annotated[
@@ -1348,27 +1352,54 @@ def recertify_cmd(
     Re-certify a live profile from random audit samples only.
 
     Joins decisions (audit=True) with outcome labels and raw predictions, applies
-    the frozen temperature, and runs CRC at the profile alpha. Organic escalations
-    are ignored. Writes a replacement profile when feasible and --profile-out is set.
+    the frozen temperature, and runs CRC at the profile alpha. A cascade profile
+    takes two -p (stage order) and re-runs the two-stage Learn-Then-Test on the
+    profile's own grids. Organic escalations are ignored. Writes a replacement
+    profile when feasible and --profile-out is set.
     """
     if confidence_level is not None and not 0.0 < confidence_level < 1.0:
         raise typer.BadParameter("--confidence-level must be in (0, 1)")
     try:
-        frozen = require_single_profile(load_profile(profile), what="decisionops recertify")
-        report = run_recertification(
-            frozen,
-            decisions=load_decisions(decisions),
-            outcomes=load_outcomes(outcomes),
-            predictions=load_predictions(predictions),
-            contract=_load_contract_option(contract),
-            as_of=as_of,
-            since=since,
-            confidence_level=confidence_level,
-        )
+        loaded = load_profile(profile)
+        if isinstance(loaded, CascadeProfile):
+            if len(predictions) != 2:
+                raise ValueError("cascade profile needs exactly two --predictions")
+            sets = load_prediction_sets(list(predictions))
+            names = tuple(sets.keys())
+            report = run_cascade_recertification(
+                loaded,
+                decisions=load_decisions(decisions),
+                outcomes=load_outcomes(outcomes),
+                stage1=sets[names[0]],
+                stage2=sets[names[1]],
+                contract=_load_contract_option(contract),
+                as_of=as_of,
+                since=since,
+                confidence_level=confidence_level,
+            )
+        else:
+            frozen = require_single_profile(loaded, what="decisionops recertify")
+            if len(predictions) != 1:
+                raise ValueError("single-model profile needs exactly one --predictions")
+            spec = predictions[0]
+            pred_path = Path(spec.partition("=")[2] if "=" in spec else spec)
+            report = run_recertification(
+                frozen,
+                decisions=load_decisions(decisions),
+                outcomes=load_outcomes(outcomes),
+                predictions=load_predictions(pred_path),
+                contract=_load_contract_option(contract),
+                as_of=as_of,
+                since=since,
+                confidence_level=confidence_level,
+            )
     except (ProfileMismatchError, ValueError, FileNotFoundError) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
-    print_recertify_report(report, console=console)
+    if isinstance(report, CascadeRecertifyReport):
+        print_cascade_recertify_report(report, console=console)
+    else:
+        print_recertify_report(report, console=console)
 
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -1387,9 +1418,17 @@ def recertify_cmd(
             )
             raise typer.Exit(code=1)
         path = save_profile(report.profile, profile_out)
+        if isinstance(report.profile, CascadeProfile):
+            t1, t2 = (s.threshold for s in report.profile.stages)
+            point = (
+                f"lambda1={'off' if t1 is None else f'{t1:.4f}'}, "
+                f"lambda2={'off' if t2 is None else f'{t2:.4f}'}"
+            )
+        else:
+            point = f"threshold={report.profile.threshold:.4f}"
         console.print(
             f"[green]Wrote[/green] {path}  "
-            f"(verdict={report.verdict}, threshold={report.profile.threshold:.4f}, "
+            f"(verdict={report.verdict}, {point}, "
             f"profile={report.profile.profile_hash})"
         )
     elif report.verdict == "infeasible":

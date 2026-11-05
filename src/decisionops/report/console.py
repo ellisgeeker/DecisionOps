@@ -655,6 +655,53 @@ def print_recertify_report(report, console: Console | None = None) -> None:
         console.print(f"• {escape(note)}")
 
 
+def print_cascade_recertify_report(report, console: Console | None = None) -> None:
+    """Print an audit-only cascade recertification diff."""
+    console = console or Console()
+
+    def lam(v) -> str:
+        return "off" if v is None else f"{v:.4f}"
+
+    def num(v) -> str:
+        return "—" if v is None else f"{v:.4f}"
+
+    console.print()
+    console.rule("[bold]DecisionOps Recertify (cascade)[/bold]")
+    c = report.certificate
+    feasible = c is not None and c.feasible
+    console.print(
+        f"verdict=[bold]{report.verdict}[/bold]  alpha={report.alpha:g}  "
+        f"n_audit={report.n_audit_calibration}  feasible={'yes' if feasible else 'no'}"
+        + (f"  min_n={c.min_n_required}  rows={c.n_rows}" if c is not None else "")
+    )
+    join = report.join or {}
+    console.print(
+        f"join: audit_decisions={join.get('n_audit_decisions')}  "
+        f"labeled={join.get('n_audit_labeled')}  "
+        f"unmatured_skipped={join.get('n_skipped_unmatured')}  "
+        f"missing_prediction={join.get('n_skipped_missing_prediction')}  "
+        f"organic_ignored={join.get('n_organic_labeled_ignored')}"
+    )
+    cur = report.current
+    console.print(
+        f"current:  lambda1={lam(cur.get('lambda1'))}  lambda2={lam(cur.get('lambda2'))}  "
+        f"bound={num(cur.get('upper_bound'))}  "
+        f"automation={num(cur.get('coverage_calibration'))}  "
+        f"n_cal={cur.get('n_calibration')}  profile={cur.get('profile_hash')}"
+    )
+    if report.proposed is not None:
+        prop = report.proposed
+        console.print(
+            f"proposed: lambda1={lam(prop.get('lambda1'))}  lambda2={lam(prop.get('lambda2'))}  "
+            f"bound={num(prop.get('upper_bound'))}  "
+            f"automation={num(prop.get('coverage_calibration'))}  "
+            f"stage1={prop.get('n_auto_stage1')}  stage2={prop.get('n_auto_stage2')}  "
+            f"n_cal={prop.get('n_calibration')}"
+        )
+    for note in report.notes:
+        console.print(f"• {escape(note)}")
+
+
 def print_drift_report(report, console: Console | None = None) -> None:
     """Print a label-free drift monitor summary."""
     console = console or Console()

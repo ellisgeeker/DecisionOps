@@ -7,8 +7,17 @@
 - Certified two-stage cascade: `certify_cascade` / `run_cascade_certification`
   (Learn-Then-Test on `(λ₁, λ₂)`), `CascadeProfile`, `decide_cascade`, CLI
   `decisionops certify-cascade` and cascade-aware `decide` (two `-p`).
-  Empirical `cascade` is unchanged. `recertify` / `drift` refuse cascade
-  profiles until that path exists.
+  Empirical `cascade` is unchanged. `drift` refuses cascade profiles until
+  that path exists.
+- Cascade recertify: `run_cascade_recertification` and `decisionops recertify`
+  with two `-p`. Audit rows only, frozen T₁/T₂, LTT re-run on the grids stored
+  in the profile (`CascadeProfile.lambda1_grid` / `lambda2_grid`, plus
+  `stage_costs`). Verdict matches single-model recertify: replace on any real
+  move of (λ₁, λ₂) or automation, stricter included.
+- findings §13: under concept drift (true risk 0.033 → 0.084), every replace
+  restored risk below α (6/300 above, HP 90%); recertify needs ~2× the audit
+  labels of a single model (infeasible on 85% of reps at n≈150).
+  `scripts/measure_cascade_label_loop.py`.
 - findings §12: BANKING77 cnb → char_lr, α=5%, HP 90%, 20 seeds — cascade
   feasible 20/20, mean test automation 80.2%, joint error 2.80%; char_lr alone
   86.1% / 3.76% (Bonferroni tax). `scripts/measure_cascade_banking77.py`.

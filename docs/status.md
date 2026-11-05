@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-04 (certified cascade CLI + BANKING77 measure, findings §12; next is Score / window rule, then showcase)
+**Last updated:** 2026-11-05 (cascade recertify + drift measure, findings §13; next is the window rule (B3) or Score, then showcase)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,9 +16,34 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: Score (ordinal) risk design, or the audit-window / staleness rule.**
-Cascade cert path is in library + CLI; cascade `recertify`/`drift` still refuse.
-Showcase pack (#7/#9/#10) still waits. PyPI is still undecided.
+**Next: audit-window rule (B3 + low-volume options) or Score (ordinal) risk.**
+Order between the two is not decided. Cascade `drift` still refuses; decide
+before the showcase whether the demo uses a cascade (then cascade drift comes
+first). Showcase pack (#7/#9/#10) still waits. PyPI is still undecided.
+
+Done 2026-11-05 — cascade recertify (decisions A1–A5, B, 2026-11-05):
+
+- A1: two predictions JSONL in stage order, joined to audit rows by id (same
+  as `decide`). An audit row needs both stages; missing ones are counted and
+  skipped.
+- A2 (revised from the first proposal): same verdict rule as single-model:
+  infeasible; else replace on any move of λ₁/λ₂ (on/off included) or of
+  calibration automation by > 1 point; else keep. A stricter point replaces.
+  The first proposal ("replace only if automation does not drop") would have
+  kept a broken profile live after drift, so it was dropped.
+- A3: no cascade `drift`. A4: no new window strategy, only `--as-of` /
+  `--since`. A5: single-model recertify semantics unchanged (join code shared).
+- B: B1/B2 stand as decided 2026-10-24 (label-count trigger; drift only
+  brings recertify forward / raises ε, never drops samples). B3 open.
+- `CascadeProfile` now stores `lambda1_grid` / `lambda2_grid` / `stage_costs`;
+  recertify reuses them (plus the live thresholds) so hypotheses stay fixed
+  before audit labels. Older profiles fall back to an even grid with a note.
+- Library `run_cascade_recertification`; CLI `recertify` with two `-p`.
+  Tests: `tests/test_recertify_cascade.py`.
+- Measured ([findings.md](findings.md) §13, 200 reps, α=5%, HP 90%): drift
+  takes true risk 0.033 → 0.084; all 300 replaces lowered risk, 6 above α.
+  Infeasible on 85% of reps at ε=5% (n≈150) vs 0% for single model — a
+  cascade needs ~2× the audit labels. Feeds the low-volume open problem.
 
 Done 2026-11-04 — certified two-stage cascade:
 
@@ -140,8 +165,9 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 4b. ~~Label-free drift monitor~~ — done 2026-10-24 (`decisionops drift`).
 5. ~~Certified conditional (selective) risk via Learn-Then-Test~~ — done
    2026-10-24 (`--risk selective`, findings §11). ~~Certified cascade
-   thresholds~~ — done 2026-11-04 (`certify-cascade`, findings §12). Remaining
-   on this line: cascade `recertify` / `drift` (currently refuse cascade
+   thresholds~~ — done 2026-11-04 (`certify-cascade`, findings §12).
+   ~~Cascade `recertify`~~ — done 2026-11-05 (findings §13). Remaining
+   on this line: cascade `drift` (currently refuses cascade
    profiles on purpose).
 6. Score (ordinal) risk design; audit window vs staleness; then the #7/#9/#10
    showcase bundle.
@@ -418,12 +444,16 @@ Open problems (not solved by the plan above):
 - **Window vs staleness.** Audit samples accumulate over months. After drift,
   old samples are no longer exchangeable with current traffic. A short
   window starves the certificate, a long one certifies the past. Needs a
-  rolling-window rule tied to the drift monitor (drop pre-drift samples on a
-  trigger).
+  rolling-window rule. Not tied to drift alerts: drift misses concept drift
+  (findings §10), so an alert only brings a recertify forward or raises ε and
+  never drops samples on its own (decided 2026-10-24, reconfirmed 2026-11-05).
+  Open: whether to cap the pool at the most recent K audit rows (B3).
 - **Low-volume customers fill slowly.** At 1k cases/month and ε=5% that is 50
   labels/month: ~2 months to the CRC floor of 99 (α=1%), ~6 months to the
   high-probability floor of 299. Options: raise ε, accept longer cycles, or
   certify at a looser α. The mechanism suits mid/high-volume traffic best.
+  A cascade roughly doubles the labels needed (findings §13: infeasible on 85%
+  of reps at ~150 audit labels, α=5% HP 90%).
 - **Using escalations via IPW (later optimisation).** With audit sampling every
   case's labelling probability is known (1 if escalated, ε if auto-accepted),
   so inverse-probability weighting can use all labelled cases. Not in v0.1: it
@@ -560,7 +590,7 @@ in tree.
 
 See **Roadmap** above for the ordered work. Beyond it:
 
-- **Cascade `recertify` / `drift`** — profiles are refused on purpose until built.
+- **Cascade `drift`** — cascade profiles are refused on purpose until built (recertify is done).
 - **Fine-tune Laya and re-measure** — model research, not on the product path.
 - **Isotonic in `compare` / `certify`** — gate has the contrast; CRC still uses
   temperature only, intentional for V1.
