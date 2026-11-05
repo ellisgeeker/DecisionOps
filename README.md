@@ -143,7 +143,13 @@ decisionops recertify profile.json --decisions decisions.jsonl \
 
 Or in Python: `dops.run_recertification(profile, decisions=..., outcomes=..., predictions=...)`.
 
-Run `recertify` on a schedule. Between runs, compare a live decisions window to a baseline (no labels) to bring the next one forward:
+Run `recertify` when enough **matured audit labels** have landed (count-based;
+~150 at α=5% for single-model CRC in findings §10; cascade needs more). There
+is no default cap that drops old audits — use `--since` / `--as-of` only when
+you mean to. Low volume: choose higher ε, longer cycles, looser α, or
+expectation CRC vs HP; the library does not retune for you
+([shadow-mode](docs/shadow-mode.md)). Between runs, compare a live decisions
+window to a baseline (no labels) to bring the next recertify forward:
 
 ```bash
 decisionops drift live.jsonl --baseline baseline.jsonl --profile profile.json

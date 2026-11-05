@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-05 (cascade recertify + cascade drift; next is the window rule (B3) or Score, then showcase)
+**Last updated:** 2026-11-05 (window/low-volume policy locked; next is Score ordinal risk, then showcase)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,10 +16,34 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: audit-window rule (B3 + low-volume options) or Score (ordinal) risk.**
-Order between the two is not decided. Cascade label loop is complete
-(`certify-cascade` → `decide` → `recertify` → `drift`). Showcase pack
-(#7/#9/#10) still waits. PyPI is still undecided.
+**Next: Score (ordinal) risk design** (error definition still open), then the
+#7/#9/#10 showcase bundle. Cascade label loop is complete
+(`certify-cascade` → `decide` → `recertify` → `drift`). Window / low-volume
+**policy** is decided below (no new rolling-window code this pass — operators
+still use optional `--as-of` / `--since`). Showcase pack still waits. PyPI is
+still undecided.
+
+Done 2026-11-05 — audit window + low-volume **product defaults** (docs only):
+
+- **B1 (stood 2026-10-24):** main clock is matured audit **count**, not a fixed
+  calendar. Recertify when enough labels have matured for the guarantee in use
+  (~150 restored α at 5% CRC in findings §10; cascade HP needs roughly **2×**,
+  findings §13).
+- **B2 (stood 2026-10-24):** a drift alert only **brings recertify forward**
+  and/or **temporarily raises ε**. It never auto-drops pre-alert samples
+  (drift misses concept drift, §10).
+- **B3 = R:** **no hard cap K** on the audit calibration pool. Do not invent a
+  default rolling discard. Operators who need a cut use optional `recertify
+  --since` / `--as-of` (maturity). A future K would need evidence, not a guess.
+- **Low volume (policy, customer chooses):** document the trade-offs; no
+  automatic retune in the library. Levers: raise `audit_rate` ε, accept a
+  longer cycle until the floor, certify at a looser α, and/or use expectation
+  CRC instead of HP when the label budget cannot support Bonferroni cascade
+  floors. Say in runbooks that cascade label demand is ~2× single-model at the
+  same α/HP. Mid/high volume remains the sweet spot; low volume is supported
+  only with explicit lever choices.
+- Code this pass: **none** beyond existing flags. Policy lives in status +
+  [shadow-mode.md](shadow-mode.md).
 
 Done 2026-11-05 — cascade drift (minimal set):
 
@@ -42,10 +66,11 @@ Done 2026-11-05 — cascade recertify (decisions A1–A5, B, 2026-11-05):
   calibration automation by > 1 point; else keep. A stricter point replaces.
   The first proposal ("replace only if automation does not drop") would have
   kept a broken profile live after drift, so it was dropped.
-- A3: no cascade `drift`. A4: no new window strategy, only `--as-of` /
-  `--since`. A5: single-model recertify semantics unchanged (join code shared).
-- B: B1/B2 stand as decided 2026-10-24 (label-count trigger; drift only
-  brings recertify forward / raises ε, never drops samples). B3 open.
+- A3 at recertify time deferred cascade `drift` (built the same day, minimal
+  set). A4: no new window strategy in that change, only `--as-of` / `--since`.
+  A5: single-model recertify semantics unchanged (join code shared).
+- B: B1/B2 stood 2026-10-24; **B3 = R** locked 2026-11-05 (no pool cap K; see
+  window policy above).
 - `CascadeProfile` now stores `lambda1_grid` / `lambda2_grid` / `stage_costs`;
   recertify reuses them (plus the live thresholds) so hypotheses stay fixed
   before audit labels. Older profiles fall back to an even grid with a note.
@@ -179,8 +204,9 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
    thresholds~~ — done 2026-11-04 (`certify-cascade`, findings §12).
    ~~Cascade `recertify`~~ — done 2026-11-05 (findings §13).
    ~~Cascade `drift`~~ — done 2026-11-05 (stage shares + shared rate bands).
-6. Score (ordinal) risk design; audit window vs staleness; then the #7/#9/#10
-   showcase bundle.
+6. ~~Audit window + low-volume policy~~ — decided 2026-11-05 (B3=R, docs only;
+   see *Label strategy*). **Score (ordinal) risk design** next; then the
+   #7/#9/#10 showcase bundle.
 
 Real-traffic validation follows the loop, so it tests the whole mechanism.
 Isotonic in CRC is **not** planned: it is monotone, so it does not reorder
@@ -410,8 +436,9 @@ is dropped from the roadmap.
     2. ~~**Weighted-loss CRC**~~ — done 2026-10-23 (`contract.severity`).
     3. ~~**v0.1.0 release**~~ — done locally 2026-10-24; remote repo pending.
     4. **0.1.x: closing the label loop** — ~~outcome feedback + `recertify`~~,
-       ~~drift monitor~~, ~~shadow-mode guide~~ done 2026-10-24. Open problems
-       (window vs staleness, low volume, IPW) remain. See *Label strategy*.
+       ~~drift monitor~~, ~~shadow-mode guide~~ done 2026-10-24.
+       ~~Window + low-volume policy~~ decided 2026-11-05 (docs). Open: IPW.
+       See *Label strategy*.
     The #7/#9/#10 bundle is the public demo after the release.
 
 ## Label strategy (decided 2026-09-27)
@@ -444,26 +471,29 @@ escalated (low-confidence) cases — a biased sample. Plan:
   alarms (they reveal only some misses), never an estimate of miss rate.
 - **Scheduled recertify, with label-free drift as an early trigger.**
   Recertify whenever enough audit labels have matured (~150 at α=5% restored
-  α in findings §10). Between runs, `drift` watches automation rate and the
-  confidence distribution (PSI / KS); a trigger brings recertify forward or
-  temporarily raises ε. Decided 2026-10-24 after measuring that drift misses
-  concept drift — a drift `ok` never replaces a scheduled recertify.
+  α in findings §10; cascade ~2×, §13). Between runs, `drift` watches
+  certified rate, confidence (PSI / KS), and cascade stage shares; a trigger
+  brings recertify forward or temporarily raises ε. Decided 2026-10-24 after
+  measuring that drift misses concept drift — a drift `ok` never replaces a
+  scheduled recertify.
+- **Audit window / staleness (decided 2026-11-05, B1–B3).** Default is
+  **accumulate matured audit labels** and recertify on **count**, not on a
+  calendar. **No default hard cap K** (B3=R) and **no auto-drop on drift
+  alert** (B2). Staleness is handled only when an operator passes `recertify
+  --since` / `--as-of` (e.g. after a known regime change or for label
+  maturity). Rationale: drift often misses concept drift (§10), so it must not
+  be the sole knife that discards history; a short automatic window starves
+  the certificate, especially for cascade HP. Revisit a default K only with
+  measurement.
+- **Low volume (policy 2026-11-05, docs only).** At 1k cases/month and ε=5%
+  that is ~50 labels/month: ~2 months to the CRC floor of 99 (α=1%), ~6 months
+  to the HP floor of 299; cascade needs still more (§13). The library does
+  **not** auto-retune. Customer chooses among: raise ε, accept longer cycles,
+  looser α, and/or expectation CRC instead of HP. Document cascade ≈2× label
+  demand in runbooks. Sweet spot remains mid/high volume.
 
 Open problems (not solved by the plan above):
 
-- **Window vs staleness.** Audit samples accumulate over months. After drift,
-  old samples are no longer exchangeable with current traffic. A short
-  window starves the certificate, a long one certifies the past. Needs a
-  rolling-window rule. Not tied to drift alerts: drift misses concept drift
-  (findings §10), so an alert only brings a recertify forward or raises ε and
-  never drops samples on its own (decided 2026-10-24, reconfirmed 2026-11-05).
-  Open: whether to cap the pool at the most recent K audit rows (B3).
-- **Low-volume customers fill slowly.** At 1k cases/month and ε=5% that is 50
-  labels/month: ~2 months to the CRC floor of 99 (α=1%), ~6 months to the
-  high-probability floor of 299. Options: raise ε, accept longer cycles, or
-  certify at a looser α. The mechanism suits mid/high-volume traffic best.
-  A cascade roughly doubles the labels needed (findings §13: infeasible on 85%
-  of reps at ~150 audit labels, α=5% HP 90%).
 - **Using escalations via IPW (later optimisation).** With audit sampling every
   case's labelling probability is known (1 if escalated, ε if auto-accepted),
   so inverse-probability weighting can use all labelled cases. Not in v0.1: it

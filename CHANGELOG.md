@@ -20,6 +20,9 @@
 - Cascade `drift`: same certified-rate + confidence PSI/KS monitor; cascade
   windows also watch stage-1 / stage-2 shares with the same absolute-rate
   bands. CLI `decisionops drift --profile` accepts cascade profiles.
+- Docs: lock audit-window + low-volume **policy** (B3=R — no default pool cap;
+  drift never auto-drops samples; low volume = customer-chosen levers, cascade
+  ≈2× labels). No new rolling-window code. status + shadow-mode + README.
 - findings §12: BANKING77 cnb → char_lr, α=5%, HP 90%, 20 seeds — cascade
   feasible 20/20, mean test automation 80.2%, joint error 2.80%; char_lr alone
   86.1% / 3.76% (Bonferroni tax). `scripts/measure_cascade_banking77.py`.

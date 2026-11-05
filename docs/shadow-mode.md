@@ -44,7 +44,14 @@ Rough floors for 0-1 loss (raise them if `contract.severity` sets \(B > 1\)):
 | α = 1% | n ≥ 99 | n ≥ 299 |
 
 Prefer several hundred matured labels before the first go-live cutover.
-Low-volume traffic may need a higher audit rate later or a looser α.
+
+**Low volume (policy, you choose the lever):** the library will not raise ε or
+loosen α for you. At ~1k decisions/month and ε=5% you only get ~50 audit
+labels/month — months to a tight floor. Pick explicitly among: higher
+`audit_rate`, longer time to first/ next certificate, looser α, or expectation
+CRC instead of high-probability (cascade HP needs roughly **2×** the labels of
+a single model; [findings §13](findings.md#13-cascade-recertify-restores-α-after-drift-but-needs-more-audit-labels)).
+Mid/high volume is the intended fit.
 
 ---
 
@@ -73,6 +80,13 @@ model that gets worse at the same confidence. Measured on 200 simulated drifts
 ([findings.md](findings.md) §10): concept drift doubled true risk (0.049 →
 0.095) while `drift` said `ok` on 190/200. Only labels reveal that. Treat a
 drift `ok` as "nothing visible changed", never as "the certificate still holds".
+
+**Window defaults (2026-11-05):** the main clock is **matured audit count**, not
+a calendar. There is **no default cap** that drops old audit rows, and a drift
+alert **never** auto-truncates the pool — it only suggests raising ε and/or
+running `recertify` sooner. If traffic clearly changed regime, pass
+`recertify --since` (and use `--as-of` for label maturity) yourself. A short
+automatic window starves certificates; cascade needs still more labels.
 
 ---
 
@@ -199,16 +213,20 @@ Rules:
 5. Store expensive-path verdicts as outcomes; mark audit rows.
 6. **Schedule `recertify`** as soon as enough audit labels have matured since the
    last one (~150 at α=5% restored α in the measurement above; more if
-   `severity` raises B). This is the main defence: it is the only step that
-   sees concept drift.
-7. Cron `drift` on rolling windows between scheduled runs. On
-   `recertify_suggested`, raise ε and bring the next `recertify` forward. A
-   drift `ok` does not let you skip a scheduled run.
+   `severity` raises B; cascade HP ~2×, findings §13). Count-based, not
+   calendar-based. This is the main defence: it is the only step that sees
+   concept drift. Do not rely on a default rolling discard of old audits; use
+   `--since` only when you intentionally cut history.
+7. Cron `drift` on rolling *decision* windows between scheduled runs (behaviour
+   monitor, not the calibration pool). On `recertify_suggested`, raise ε and
+   bring the next `recertify` forward. A drift `ok` does not let you skip a
+   scheduled run and does not delete audit labels.
 8. Install `profile_next` only after review of the recertify diff (threshold,
    coverage, bound). Expect lower coverage after concept drift (46% → ~28% in
    the measurement): that is the certificate correctly automating less.
 9. Until the next recertify completes, the live certificate can run above α.
-   Higher ε and shorter label maturity shrink that window.
+   Higher ε and shorter label maturity shrink that exposure. Low-volume sites
+   pick levers up front (ε / cycle length / α / CRC vs HP); nothing auto-tunes.
 
 The certificate always holds **relative to the expensive path’s verdict** (or
 your labelling rule). Say that in the contract description.
