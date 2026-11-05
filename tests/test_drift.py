@@ -325,3 +325,36 @@ def test_baseline_from_another_profile_is_flagged():
     report = run_drift_monitor(live, base, profile=newer, min_window=50)
     assert any(n.startswith("Baseline decisions reference profile") for n in report.notes)
     assert not any(n.startswith("Live decisions reference profile") for n in report.notes)
+
+
+def test_cascade_window_with_no_autos_is_still_cascade():
+    """Every case escalates, so no decision carries a stage; the profile says cascade."""
+    from decisionops.decide import CascadeProfile, CascadeStage, Decision
+
+    profile = CascadeProfile(
+        alpha=0.05,
+        confidence_level=0.9,
+        stages=[CascadeStage(threshold=0.99), CascadeStage(threshold=0.99)],
+        n_calibration=100,
+    )
+    window = [
+        Decision(
+            id=str(i), action="escalate", choice="skip", confidence=0.5 + i / 200,
+            threshold=0.99, alpha=0.05, reason="below_threshold", profile=profile.profile_hash,
+        )
+        for i in range(60)
+    ]
+    report = run_drift_monitor(window, window, profile=profile)
+    assert report.baseline.cascade is True
+    assert report.baseline.stage1_rate == 0.0 and report.baseline.stage2_rate == 0.0
+    assert report.verdict == "ok"
+
+
+def test_single_model_profile_rejects_cascade_decisions():
+    profile, _, _ = _profile_decisions(n=200, seed=72)
+    _, cascade_dec = _cascade_profile_and_base(n=800, seed=40)
+    try:
+        run_drift_monitor(cascade_dec, cascade_dec, profile=profile, min_window=50)
+        raise AssertionError("expected ValueError")
+    except ValueError as exc:
+        assert "single-model" in str(exc)

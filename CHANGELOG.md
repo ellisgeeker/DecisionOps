@@ -30,6 +30,10 @@
   `len(choice_order) - 1`, so some under-rating always counts.
 - `drift` also flags a baseline window produced by another profile (start a new
   baseline after installing a recertified profile).
+- Empirical `cascade` counts a miss with the contract's loss (ordinal under-rate
+  when `choice_order` is set), matching the certificate.
+- `drift --profile` takes the window kind from the profile, so a cascade window
+  in which nothing auto-executed is no longer mistaken for single-model.
 - Docs: lock audit-window + low-volume **policy** (B3=R — no default pool cap;
   drift never auto-drops samples; low volume = customer-chosen levers, cascade
   ≈2× labels). No new rolling-window code. status + shadow-mode + README.

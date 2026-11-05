@@ -547,9 +547,15 @@ def print_cascade_report(report: CascadeReport, console: Console | None = None) 
             )
         console.print(table)
 
+    order = (report.contract or {}).get("choice_order")
+    if order:
+        tol = (report.contract or {}).get("under_rate_tolerance")
+        wrong = f"under-rated by more than {tol} level(s)"
+    else:
+        wrong = "wrong"
     console.print(
         "[dim]Escalation costs are oracle. miss_rate is the joint automated error rate "
-        "(auto AND wrong over all traffic) — the same quantity CRC certifies. "
+        f"(auto AND {wrong}, over all traffic) — the same quantity CRC certifies. "
         "Thresholds here are empirical, not certified.[/dim]"
     )
     for note in report.notes:

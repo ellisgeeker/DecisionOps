@@ -99,7 +99,14 @@ def _confidence_array(decisions: list[Decision]) -> np.ndarray:
     return np.asarray([d.confidence for d in decisions], dtype=np.float64)
 
 
-def window_stats(decisions: list[Decision]) -> WindowStats:
+def window_stats(decisions: list[Decision], *, cascade: bool | None = None) -> WindowStats:
+    """
+    Summarise one decisions window.
+
+    `cascade` forces the profile kind. When None it is inferred: any decision
+    with a `stage` means cascade. That guess fails for a cascade window where
+    nothing auto-executed (every `stage` is None), so pass the kind when known.
+    """
     if not decisions:
         raise ValueError("cannot summarise an empty decisions window")
     n = len(decisions)
@@ -110,16 +117,18 @@ def window_stats(decisions: list[Decision]) -> WindowStats:
     reasons: dict[str, int] = {}
     choices: dict[str, int] = {}
     n_stage1 = n_stage2 = 0
-    cascade = False
+    seen_stage = False
     for d in decisions:
         reasons[d.reason] = reasons.get(d.reason, 0) + 1
         choices[d.choice] = choices.get(d.choice, 0) + 1
         if d.stage is not None:
-            cascade = True
+            seen_stage = True
             if d.stage == 1:
                 n_stage1 += 1
             elif d.stage == 2:
                 n_stage2 += 1
+    if cascade is None:
+        cascade = seen_stage
     choice_rates = {k: v / n for k, v in sorted(choices.items())}
     return WindowStats(
         n=n,
@@ -227,20 +236,27 @@ def run_drift_monitor(
             f"baseline window has {len(baseline)} decisions; need at least {min_window}"
         )
 
-    base_stats = window_stats(baseline)
-    live_stats = window_stats(live)
-    if base_stats.cascade != live_stats.cascade:
-        raise ValueError(
-            "baseline and live windows disagree on cascade vs single-model "
-            f"(baseline cascade={base_stats.cascade}, live cascade={live_stats.cascade}); "
-            "compare windows from one profile kind"
-        )
     if profile is not None:
-        is_cascade = isinstance(profile, CascadeProfile)
-        if is_cascade != base_stats.cascade:
+        # The profile says what kind of decisions these are. Inferring it from
+        # `stage` would misread a cascade window in which nothing auto-executed.
+        kind = isinstance(profile, CascadeProfile)
+        base_stats = window_stats(baseline, cascade=kind)
+        live_stats = window_stats(live, cascade=kind)
+        if not kind and any(d.stage is not None for d in [*baseline, *live]):
             raise ValueError(
-                f"profile kind {'cascade' if is_cascade else 'single-model'} does not "
-                f"match the decisions windows (cascade={base_stats.cascade})"
+                "profile is single-model but the decisions carry cascade stages; "
+                "pass the cascade profile these decisions were routed with"
+            )
+    else:
+        base_stats = window_stats(baseline)
+        live_stats = window_stats(live)
+        if base_stats.cascade != live_stats.cascade:
+            raise ValueError(
+                "cannot tell whether both windows come from one profile kind "
+                f"(baseline has cascade stages: {base_stats.cascade}, live: "
+                f"{live_stats.cascade}). Either they mix cascade and single-model "
+                "decisions, or a cascade window auto-executed nothing. Pass "
+                "--profile so the kind is known."
             )
 
     delta_c = live_stats.certified_rate - base_stats.certified_rate

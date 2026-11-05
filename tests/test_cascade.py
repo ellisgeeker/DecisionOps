@@ -227,3 +227,30 @@ def test_cascade_cli_rejects_contract_without_costs(tmp_path):
     )
     assert result.exit_code != 0
     assert "cost" in result.output.lower()
+
+
+def test_empirical_cascade_counts_ordinal_misses():
+    """One level low is not a miss under tolerance 1; two levels low is."""
+    from decisionops.cascade import run_cascade
+    from decisionops.contract import DecisionContract
+
+    levels = ["skip", "shallow", "deep", "human"]
+    contract = DecisionContract(
+        name="ord",
+        choices=levels,
+        auto_choices=["skip", "shallow", "deep"],
+        choice_order=levels,
+        under_rate_tolerance=1,
+        costs={"skip": 0.0, "shallow": 0.2, "deep": 1.0, "human": 25.0},
+    )
+    cases, preds = [], []
+    for i in range(100):
+        two_low = i < 10
+        label, pred = ("deep", "skip") if two_low else ("deep", "shallow")
+        cases.append(DecisionCase(id=str(i), choices=levels, label=label))
+        probs = {c: 0.05 for c in levels}
+        probs[pred] = 0.85
+        preds.append(DecisionPrediction(id=str(i), prediction=pred, probabilities=probs))
+    report = run_cascade(cases, preds, contract)
+    # Every prediction is auto-eligible at threshold 0: 10 two-low misses of 100.
+    assert report.always_auto_miss_rate == 0.10

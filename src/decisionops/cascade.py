@@ -124,7 +124,9 @@ def _point_at_threshold(
         if eligible:
             is_auto[i] = True
             costs[i] = auto_cost(contract, pred)
-            if pred.prediction != case.label:
+            # Same miss definition as the certificate: exact match by default,
+            # under-rate beyond tolerance for an ordinal contract.
+            if contract.miss_loss(pred.prediction, case.label) > 0.0:
                 is_miss[i] = True
         else:
             costs[i] = escalate_cost(contract, case)
@@ -211,10 +213,15 @@ def run_cascade(
     providers = {p.provider for p in preds_all if p.provider}
     models = {p.model for p in preds_all if p.model}
 
+    wrong = (
+        f"under-rated by more than {contract.under_rate_tolerance} level(s)"
+        if contract.is_ordinal
+        else "wrong"
+    )
     notes = [
         "Escalation costs are oracle (true escalate label, else cheapest escalate).",
-        "miss_rate is the joint automated error rate (auto AND wrong over all traffic), "
-        "the same quantity CRC certifies.",
+        f"miss_rate is the joint automated error rate (auto AND {wrong} over all "
+        "traffic), the same quantity CRC certifies.",
         "Curve is scored on the held-out test split; thresholds are not CRC-certified.",
     ]
     if baseline <= 0:
