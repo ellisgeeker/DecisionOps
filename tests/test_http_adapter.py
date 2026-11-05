@@ -251,3 +251,21 @@ def test_redirect_is_refused_and_token_not_forwarded():
         server.shutdown()
         server.server_close()
     assert seen == []
+
+
+def test_error_status_survives_unreadable_body(monkeypatch):
+    """A server that sends a status then resets the socket must still yield the status."""
+    import io
+    import urllib.error
+
+    class ResetBody(io.RawIOBase):
+        def read(self, *args, **kwargs):
+            raise ConnectionResetError(54, "Connection reset by peer")
+
+    def fake_read(self, request):
+        raise urllib.error.HTTPError(request.full_url, 302, "Found", {}, ResetBody())
+
+    monkeypatch.setattr(HttpProvider, "_read", fake_read)
+    provider = HttpProvider("http://127.0.0.1:9/predict", token="sekrit")
+    with pytest.raises(RuntimeError, match="HTTP 302.*body unavailable"):
+        provider.predict(CASE)

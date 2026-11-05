@@ -158,7 +158,13 @@ class HttpProvider:
         try:
             raw = self._read(request)
         except urllib.error.HTTPError as exc:
-            snippet = exc.read()[:400].decode("utf-8", errors="replace")
+            # The body is only context. A server that sends a status and closes
+            # (common for redirects) makes this read raise; that must not hide
+            # the status code or escape as a raw socket error.
+            try:
+                snippet = exc.read()[:400].decode("utf-8", errors="replace")
+            except OSError:
+                snippet = "<response body unavailable>"
             raise RuntimeError(
                 f"HTTP {exc.code} from {self.url} for case {payload.get('id')!r}: {snippet}"
             ) from exc
