@@ -451,12 +451,23 @@ def _cert_html(report: CertificationReport) -> str:
             "calibration draw (Clopper-Pearson)."
         )
         split_hint = "The bound is on true risk; a finite test split can still land above α."
-    quantity_html = (
-        "<strong>selective error rate</strong>: errors among auto-accepted cases only"
-        if selective
-        else "<strong>joint automated error</strong> (severity-weighted when the "
-        "contract sets severity), not selective risk"
-    )
+    contract = (report.metadata or {}).get("contract") or {}
+    if selective:
+        quantity_html = (
+            "<strong>selective error rate</strong>: errors among auto-accepted cases only"
+        )
+    elif contract.get("choice_order"):
+        quantity_html = (
+            "<strong>ordinal under-rate joint automated error</strong>: auto-accepted "
+            f"and under-rated by more than {_esc(contract.get('under_rate_tolerance'))} "
+            "level(s); over-rating is free. Not selective risk"
+        )
+    elif contract.get("severity"):
+        quantity_html = (
+            "<strong>severity-weighted joint automated error</strong>, not selective risk"
+        )
+    else:
+        quantity_html = "<strong>joint automated error</strong>, not selective risk"
     rows = []
     for level in report.levels:
         c = level.certificate
@@ -519,13 +530,16 @@ def _compare_html(report: ComparisonReport) -> str:
         for r in report.target_risks
     )
     notes = "".join(f"<li>{_esc(n)}</li>" for n in report.notes)
+    qlabel = (report.metadata or {}).get(
+        "certified_quantity_label", "joint automated error rate"
+    )
     return _page(
         "DecisionOps Comparison",
         f"""
         <h1>DecisionOps comparison</h1>
         <p class="sub">dataset={_esc(report.dataset)} n_test={report.split.n_test}
           seed={report.split.seed}. Ranking uses CRC certificates
-          (joint automated error rate).</p>
+          ({_esc(qlabel)}).</p>
         <table>
           <thead><tr><th>Model</th><th>Acc</th><th>ECE cal</th>{head}</tr></thead>
           <tbody>{"".join(rows)}</tbody>

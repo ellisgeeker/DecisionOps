@@ -285,3 +285,18 @@ def test_certify_notes_name_ordinal_quantity():
     assert not any("severity-weighted" in n for n in report.notes)
     wanted = "ordinal under-rate joint automated error, not conditional"
     assert any(wanted in n for n in report.notes)
+
+
+def test_html_reports_name_ordinal_quantity(tmp_path):
+    from decisionops.compare import compare_models
+    from decisionops.report import write_html_report
+
+    cases, preds = _one_under_pool(300)
+    cert = run_certification(cases, preds, alphas=[0.05], contract=ORDINAL, calibrate=False)
+    html = write_html_report(cert, tmp_path / "cert.html").read_text(encoding="utf-8")
+    assert "ordinal under-rate joint automated error" in html
+    assert "severity-weighted when" not in html
+
+    cmp = compare_models(cases, {"a": preds, "b": preds}, contract=ORDINAL, calibrate=False)
+    html = write_html_report(cmp, tmp_path / "cmp.html").read_text(encoding="utf-8")
+    assert "ordinal under-rate joint automated error" in html
