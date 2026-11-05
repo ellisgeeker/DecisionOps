@@ -610,7 +610,7 @@ in tree.
 
 ### Validation performed
 
-- **214+ tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
+- **240+ tests passing**, 4 skipped (live Jev smoke without a key; 3 Laya tests
   without torch). Coverage ≥85% with `--extra dev --extra jev` (CI's setup),
   ruff clean on `src tests` (older `scripts/` not linted by CI).
 

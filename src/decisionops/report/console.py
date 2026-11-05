@@ -158,8 +158,15 @@ def print_gate_report(report: GateReport, console: Console | None = None) -> Non
     color = {"go": "green", "watch": "yellow", "no-go": "red"}.get(v.recommendation, "white")
     console.print()
     console.print(f"[bold {color}]Verdict: {v.recommendation.upper()}[/bold {color}]")
+    gate_contract = (report.metadata or {}).get("contract") or {}
+    if gate_contract.get("choice_order"):
+        basis = "ordinal under-rate joint automated error"
+    elif gate_contract.get("severity"):
+        basis = "severity-weighted joint automated error"
+    else:
+        basis = "joint automated error rate"
     console.print(
-        f"Basis: CRC certificate at {v.verdict_alpha:.0%} joint automated error rate; "
+        f"Basis: CRC certificate at {v.verdict_alpha:.0%} {basis}; "
         f"go needs certified test coverage >= {v.min_coverage:.0%}"
     )
     if v.certified_feasible and v.certified_coverage is not None:
@@ -347,8 +354,11 @@ def print_comparison_report(
         f"seed={report.split.seed}{crc_bit}  "
         f"(shared split across models)"
     )
+    qlabel = (report.metadata or {}).get(
+        "certified_quantity_label", "joint automated error rate"
+    )
     console.print(
-        "[dim]Certified quantity is the joint automated error rate, "
+        f"[dim]Certified quantity is the {escape(qlabel)}, "
         "not conditional selective risk.[/dim]"
     )
     console.print()
@@ -378,7 +388,7 @@ def print_comparison_report(
     console.print(quality)
 
     cert = Table(
-        title="Certified coverage (CRC; joint automated error rate)",
+        title=f"Certified coverage (CRC; {escape(qlabel)})",
         show_header=True,
         header_style="bold",
     )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from decisionops.conformal.certify import CertificationReport, run_certification
+from decisionops.conformal.risk_control import ORDINAL_QUANTITY
 from decisionops.contract import DecisionContract
 from decisionops.eval import run_gate
 from decisionops.io import load_dataset, load_predictions
@@ -116,6 +117,17 @@ def compare_models(
     entries: list[ComparisonEntry] = []
     split_info = None
     n_crc_cal = None
+    quantity = "joint_automated_error_rate"
+    quantity_label = "joint automated error rate"
+    if contract is not None and contract.is_ordinal:
+        quantity = ORDINAL_QUANTITY
+        quantity_label = (
+            f"ordinal under-rate joint automated error "
+            f"(tolerance {contract.under_rate_tolerance})"
+        )
+    elif contract is not None and contract.severity:
+        quantity = "weighted_joint_automated_error"
+        quantity_label = "severity-weighted joint automated error"
     for name, preds in prediction_sets.items():
         report = run_gate(
             cases,
@@ -147,7 +159,7 @@ def compare_models(
     best: dict[str, str] = {}
     feasible_counts: dict[str, int] = {}
     notes: list[str] = [
-        "Ranking uses CRC certificates (joint automated error rate), not empirical "
+        f"Ranking uses CRC certificates ({quantity_label}), not empirical "
         "selective risk. Empirical figures stay in the report for contrast and are "
         "marked ! when they rebound on test.",
         "CRC certifies E[loss] <= alpha under exchangeability. A single test split "
@@ -204,10 +216,11 @@ def compare_models(
             "n_crc_calibration": n_crc_cal,
             "ranking_rule": (
                 "max certified test coverage among models with a feasible "
-                "CRC certificate (joint automated error rate)"
+                f"CRC certificate ({quantity_label})"
             ),
             "n_feasible_by_risk": feasible_counts,
-            "certified_quantity": "joint_automated_error_rate",
+            "certified_quantity": quantity,
+            "certified_quantity_label": quantity_label,
             "contract": contract.summary() if contract is not None else None,
         },
     )

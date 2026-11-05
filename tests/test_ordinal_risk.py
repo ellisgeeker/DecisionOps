@@ -215,3 +215,73 @@ def test_selective_rejects_ordinal_contract():
         run_certification(
             cases, preds, alphas=[0.1], contract=ORDINAL, risk="selective", calibrate=False
         )
+
+
+def test_tolerance_must_leave_a_counting_gap():
+    # 4 levels: max gap 3, so tolerance 3 (or more) makes every miss free.
+    with pytest.raises(ValidationError, match="under_rate_tolerance"):
+        ORDINAL.model_validate({**ORDINAL.model_dump(), "under_rate_tolerance": 3})
+    # 2 levels: max gap 1, only tolerance 0 is meaningful.
+    with pytest.raises(ValidationError, match="under_rate_tolerance"):
+        DecisionContract(
+            name="bin", choices=["lo", "hi"], auto_choices=["lo"], choice_order=["lo", "hi"]
+        )
+    ok = DecisionContract(
+        name="bin",
+        choices=["lo", "hi"],
+        auto_choices=["lo"],
+        choice_order=["lo", "hi"],
+        under_rate_tolerance=0,
+    )
+    assert ok.miss_loss("lo", "hi") == 1.0
+
+
+def _one_under_pool(n: int = 600):
+    """Every prediction is exactly one level low: ordinal-free, equality-wrong."""
+    rng = np.random.default_rng(5)
+    cases, preds = [], []
+    for i in range(n):
+        true_i = 1 + int(rng.integers(0, 3))
+        cases.append(DecisionCase(id=str(i), choices=LEVELS, label=LEVELS[true_i]))
+        preds.append(_pred(str(i), LEVELS[true_i - 1], float(rng.uniform(0.6, 0.99))))
+    return cases, preds
+
+
+def test_gate_empirical_thresholds_use_ordinal_loss():
+    """Empirical table and CRC verdict must measure the same quantity."""
+    from decisionops.eval import run_gate
+
+    cases, preds = _one_under_pool()
+    report = run_gate(cases, preds, contract=ORDINAL, calibrate=False, target_risks=[0.05])
+    raw = report.conditions[0]
+    test_thr = raw.thresholds[0]
+    assert test_thr.selective_risk == 0.0
+    assert test_thr.coverage > 0.9
+    assert report.verdict.certified_coverage is not None
+    assert report.verdict.certified_coverage > 0.9
+    # Calibration metrics stay exact-match on purpose: every prediction is wrong.
+    assert raw.accuracy == 0.0
+
+
+def test_compare_labels_ordinal_quantity_and_empirical_agrees():
+    from decisionops.compare import compare_models
+
+    cases, preds = _one_under_pool()
+    report = compare_models(
+        cases, {"a": preds, "b": preds}, contract=ORDINAL, calibrate=False, target_risks=[0.05]
+    )
+    assert report.metadata["certified_quantity"] == ORDINAL_QUANTITY
+    assert "ordinal" in report.metadata["certified_quantity_label"]
+    assert any("ordinal" in n for n in report.notes)
+    entry = report.entries[0]
+    key = next(iter(entry.coverage_by_risk))
+    assert entry.coverage_by_risk[key] > 0.9
+    assert entry.selective_risk_by_risk[key] == 0.0
+
+
+def test_certify_notes_name_ordinal_quantity():
+    cases, preds = _one_under_pool(300)
+    report = run_certification(cases, preds, alphas=[0.05], contract=ORDINAL, calibrate=False)
+    assert not any("severity-weighted" in n for n in report.notes)
+    wanted = "ordinal under-rate joint automated error, not conditional"
+    assert any(wanted in n for n in report.notes)

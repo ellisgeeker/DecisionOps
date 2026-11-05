@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decisionops.schemas import DecisionCase, DecisionPrediction, ThresholdRecommendation
-from decisionops.selective.threshold import evaluate_threshold
+from decisionops.selective.threshold import LossOf, evaluate_threshold
 
 
 def evaluate_fixed_thresholds(
@@ -11,6 +11,7 @@ def evaluate_fixed_thresholds(
     *,
     target_risks_and_thresholds: list[tuple[float, float]],
     auto_choices: frozenset[str] | None = None,
+    loss_of: LossOf | None = None,
 ) -> list[ThresholdRecommendation]:
     """
     Evaluate pre-selected thresholds on `pairs` (typically the test split).
@@ -20,7 +21,9 @@ def evaluate_fixed_thresholds(
     """
     out: list[ThresholdRecommendation] = []
     for target_risk, threshold in target_risks_and_thresholds:
-        point = evaluate_threshold(pairs, threshold, auto_choices=auto_choices)
+        point = evaluate_threshold(
+            pairs, threshold, auto_choices=auto_choices, loss_of=loss_of
+        )
         sel_acc = 0.0 if point.n_accepted == 0 else float(point.selective_accuracy)
         sel_risk = 1.0 if point.n_accepted == 0 else float(point.selective_risk)
         out.append(

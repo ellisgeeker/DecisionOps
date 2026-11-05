@@ -314,3 +314,14 @@ def test_cli_drift_accepts_cascade_profile(tmp_path):
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["metadata"]["cascade"] is True
     assert payload["delta_stage1_rate"] is not None
+
+
+def test_baseline_from_another_profile_is_flagged():
+    """After a profile swap, an old baseline must be called out, not silently compared."""
+    profile, base, _ = _profile_decisions(n=600, seed=90, audit_rate=0.1)
+    newer = profile.model_copy(update={"threshold": min(0.999, profile.threshold + 0.05)})
+    _, preds = _preds(600, 91)
+    live = decide_many(preds, newer)
+    report = run_drift_monitor(live, base, profile=newer, min_window=50)
+    assert any(n.startswith("Baseline decisions reference profile") for n in report.notes)
+    assert not any(n.startswith("Live decisions reference profile") for n in report.notes)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -19,14 +20,31 @@ class RiskCoveragePoint:
     n_total: int
 
 
+LossOf = Callable[[DecisionCase, DecisionPrediction], float]
+"""Per-case 0-1 error, e.g. `DecisionContract.pair_loss` for ordinal contracts."""
+
+
 def _confidence_and_correct(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
+    loss_of: LossOf | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Confidence and per-case correctness (1 - error).
+
+    `loss_of` decides what an error is; default is exact match. Ordinal
+    contracts pass their under-rate loss so these empirical figures match the
+    quantity the certificate controls.
+    """
     conf = np.array([pred.confidence for _, pred in pairs], dtype=np.float64)
-    correct = np.array(
-        [1.0 if pred.prediction == case.label else 0.0 for case, pred in pairs],
-        dtype=np.float64,
-    )
+    if loss_of is None:
+        correct = np.array(
+            [1.0 if pred.prediction == case.label else 0.0 for case, pred in pairs],
+            dtype=np.float64,
+        )
+    else:
+        correct = np.array(
+            [1.0 - float(loss_of(case, pred)) for case, pred in pairs], dtype=np.float64
+        )
     return conf, correct
 
 
@@ -51,6 +69,7 @@ def evaluate_threshold(
     threshold: float,
     *,
     auto_choices: frozenset[str] | None = None,
+    loss_of: LossOf | None = None,
 ) -> RiskCoveragePoint:
     """
     Accept when the prediction is auto-eligible and max probability >= threshold.
@@ -60,7 +79,7 @@ def evaluate_threshold(
     """
     if not pairs:
         raise ValueError("cannot evaluate threshold on empty input")
-    conf, correct = _confidence_and_correct(pairs)
+    conf, correct = _confidence_and_correct(pairs, loss_of)
     accepted = auto_eligible(pairs, auto_choices) & (conf >= threshold)
     n_total = len(pairs)
     n_accepted = int(accepted.sum())
@@ -89,13 +108,17 @@ def risk_coverage_curve(
     thresholds: list[float] | None = None,
     *,
     auto_choices: frozenset[str] | None = None,
+    loss_of: LossOf | None = None,
 ) -> list[RiskCoveragePoint]:
     """Sweep confidence thresholds and compute risk/coverage points."""
     if thresholds is None:
         thresholds = [round(x, 2) for x in np.arange(0.50, 1.00, 0.01)] + [0.99, 1.0]
         # unique + sorted
         thresholds = sorted(set(float(t) for t in thresholds))
-    return [evaluate_threshold(pairs, t, auto_choices=auto_choices) for t in thresholds]
+    return [
+        evaluate_threshold(pairs, t, auto_choices=auto_choices, loss_of=loss_of)
+        for t in thresholds
+    ]
 
 
 def recommend_thresholds(
@@ -103,6 +126,7 @@ def recommend_thresholds(
     target_risks: list[float] | None = None,
     *,
     auto_choices: frozenset[str] | None = None,
+    loss_of: LossOf | None = None,
 ) -> list[ThresholdRecommendation]:
     """
     For each target risk α, pick the *lowest* threshold whose empirical
@@ -114,7 +138,7 @@ def recommend_thresholds(
     if target_risks is None:
         target_risks = [0.01, 0.05, 0.10]
 
-    curve = risk_coverage_curve(pairs, auto_choices=auto_choices)
+    curve = risk_coverage_curve(pairs, auto_choices=auto_choices, loss_of=loss_of)
     # Sort by increasing threshold so we can scan for feasible points.
     curve_sorted = sorted(curve, key=lambda p: p.threshold)
 

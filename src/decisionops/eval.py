@@ -36,16 +36,17 @@ from decisionops.selective import (
     recommend_thresholds,
     risk_coverage_curve,
 )
-from decisionops.selective.threshold import RiskCoveragePoint
+from decisionops.selective.threshold import LossOf, RiskCoveragePoint
 from decisionops.split import split_pairs
 
 
 def _curve_payload(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     auto_choices: frozenset[str] | None = None,
+    loss_of: LossOf | None = None,
 ) -> list[dict[str, float | int]]:
     out: list[dict[str, float | int]] = []
-    for p in risk_coverage_curve(pairs, auto_choices=auto_choices):
+    for p in risk_coverage_curve(pairs, auto_choices=auto_choices, loss_of=loss_of):
         point: dict[str, float | int] = {
             "threshold": p.threshold,
             "coverage": p.coverage,
@@ -68,6 +69,7 @@ def _pairs_metrics(
     name: str = "raw",
     temperature: float | None = None,
     auto_choices: frozenset[str] | None = None,
+    loss_of: LossOf | None = None,
 ) -> ConditionResult:
     return ConditionResult(
         name=name,
@@ -90,7 +92,7 @@ def _pairs_metrics(
             }
             for b in reliability_bins(pairs, n_bins=n_bins)
         ],
-        risk_coverage=_curve_payload(pairs, auto_choices),
+        risk_coverage=_curve_payload(pairs, auto_choices, loss_of),
     )
 
 
@@ -277,6 +279,10 @@ def run_gate(
     if contract is not None:
         contract.validate_data(cases, predictions)
     auto = auto_set_of(contract)
+    # Ordinal contracts: empirical thresholds use the same under-rate loss as
+    # the certificate. Accuracy / ECE stay exact-match: they describe the
+    # probabilities, not the routing policy.
+    loss_of = contract.pair_loss if contract is not None and contract.is_ordinal else None
 
     pairs = align_cases_and_predictions(cases, predictions)
     split = split_pairs(pairs, cal_ratio=cal_ratio, seed=seed)
@@ -299,10 +305,15 @@ def run_gate(
         name: str,
         temperature: float | None = None,
     ) -> ConditionResult:
-        cal_recs = recommend_thresholds(cal_pairs, target_risks=target_risks, auto_choices=auto)
+        cal_recs = recommend_thresholds(
+            cal_pairs, target_risks=target_risks, auto_choices=auto, loss_of=loss_of
+        )
         fixed = [(r.target_risk, r.threshold) for r in cal_recs]
         test_recs = evaluate_fixed_thresholds(
-            test_pairs, target_risks_and_thresholds=fixed, auto_choices=auto
+            test_pairs,
+            target_risks_and_thresholds=fixed,
+            auto_choices=auto,
+            loss_of=loss_of,
         )
         return _pairs_metrics(
             test_pairs,
@@ -312,6 +323,7 @@ def run_gate(
             name=name,
             temperature=temperature,
             auto_choices=auto,
+            loss_of=loss_of,
         )
 
     # Raw condition

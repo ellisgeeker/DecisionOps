@@ -225,9 +225,15 @@ def run_certification(
             "exchangeability."
         )
     else:
+        if contract is not None and contract.is_ordinal:
+            kind = "ordinal under-rate joint automated error"
+        elif contract is not None and contract.severity:
+            kind = "severity-weighted joint automated error"
+        else:
+            kind = "joint automated error rate"
         notes.append(
-            "Certified quantity is the (possibly severity-weighted) joint automated "
-            "error, not conditional selective risk. Assumes exchangeability."
+            f"Certified quantity is the {kind}, not conditional selective risk. "
+            "Assumes exchangeability."
         )
     if risk == "selective":
         notes.append(

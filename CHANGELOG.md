@@ -24,6 +24,12 @@
   fields `choice_order` + `under_rate_tolerance` (default 1); CRC quantity
   `ordinal_under_rate_joint_automated_error`; wired through `certify` /
   `decide` / `recertify`. Example `examples/contracts/ordinal-routing.json`.
+  `gate` / `compare` empirical thresholds and risk-coverage curves use the same
+  under-rate loss, and their labels name the certified quantity (they were
+  exact-match before). `under_rate_tolerance` must be below
+  `len(choice_order) - 1`, so some under-rating always counts.
+- `drift` also flags a baseline window produced by another profile (start a new
+  baseline after installing a recertified profile).
 - Docs: lock audit-window + low-volume **policy** (B3=R — no default pool cap;
   drift never auto-drops samples; low volume = customer-chosen levers, cascade
   ≈2× labels). No new rolling-window code. status + shadow-mode + README.

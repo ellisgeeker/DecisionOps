@@ -209,7 +209,9 @@ def run_drift_monitor(
     Compare a live decisions window to a baseline window.
 
     Both windows should come from the same profile (same thresholds / audit_rate)
-    so the comparison is behavioural drift, not a config change. Works for
+    so the comparison is behavioural drift, not a config change. After a
+    recertify installs a new profile, rebuild the baseline from that profile's
+    decisions; a new threshold shifts certified rate by design. Works for
     single-model and cascade profiles. Cascade windows also compare stage-1 /
     stage-2 shares with the same absolute-rate bands as certified rate.
 
@@ -288,12 +290,15 @@ def run_drift_monitor(
                 f"profile coverage_calibration {expected:.1%} by more than 8 points; "
                 "confirm the baseline was produced with this profile."
             )
-        live_hashes = {d.profile for d in live if d.profile}
-        if live_hashes and profile_hash not in live_hashes:
-            notes.append(
-                f"Live decisions reference profile hash(es) {sorted(live_hashes)}; "
-                f"monitor profile is {profile_hash}. Compare windows from one profile."
-            )
+        for label, window in (("Live", live), ("Baseline", baseline)):
+            hashes = {d.profile for d in window if d.profile}
+            if hashes and profile_hash not in hashes:
+                notes.append(
+                    f"{label} decisions reference profile hash(es) {sorted(hashes)}; "
+                    f"monitor profile is {profile_hash}. Compare windows from one "
+                    "profile: after installing a recertified profile, start a new "
+                    "baseline from its own decisions."
+                )
 
     verdict = _verdict(
         delta_certified=delta_c, psi=psi, ks_p=ks_p, rate_deltas=stage_deltas or None

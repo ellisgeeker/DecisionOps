@@ -224,6 +224,10 @@ Rules:
 8. Install `profile_next` only after review of the recertify diff (threshold,
    coverage, bound). Expect lower coverage after concept drift (46% → ~28% in
    the measurement): that is the certificate correctly automating less.
+   Then **start a new drift baseline** from `profile_next`'s own decisions: a
+   new threshold moves certified rate by design, so comparing it to the old
+   baseline raises a false `recertify_suggested`. `drift` notes a profile-hash
+   mismatch on either window.
 9. Until the next recertify completes, the live certificate can run above α.
    Higher ε and shorter label maturity shrink that exposure. Low-volume sites
    pick levers up front (ε / cycle length / α / CRC vs HP); nothing auto-tunes.

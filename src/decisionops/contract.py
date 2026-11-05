@@ -95,7 +95,8 @@ class DecisionContract(BaseModel):
 
     Error iff `rank(true) - rank(pred) > under_rate_tolerance`. Default 1 means
     missing by one level is allowed; missing by two or more is a miss. Only
-    used when `choice_order` is set. Over-rating is never a miss.
+    used when `choice_order` is set, and must be below `len(choice_order) - 1`
+    so some gap still counts. Over-rating is never a miss.
     """
 
     @model_validator(mode="after")
@@ -157,6 +158,16 @@ class DecisionContract(BaseModel):
                 raise ValueError(
                     f"contract {self.name!r}: choice_order (ordinal under-rate loss) "
                     "cannot be combined with severity; use one loss definition"
+                )
+            # The largest possible gap is len-1. A tolerance >= that makes every
+            # miss free, so the certificate would bound nothing.
+            max_gap = len(self.choice_order) - 1
+            if self.under_rate_tolerance >= max_gap:
+                raise ValueError(
+                    f"contract {self.name!r}: under_rate_tolerance="
+                    f"{self.under_rate_tolerance} must be < {max_gap} "
+                    f"(the largest gap on {len(self.choice_order)} levels); otherwise "
+                    "no under-rating is ever an error"
                 )
         return self
 
