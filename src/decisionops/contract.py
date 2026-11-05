@@ -19,6 +19,13 @@ auto-path miss by its *true* label: auto-skipping a case that needed a human
 can cost more than auto-skipping one that needed an LLM. Omitted labels
 default to 1.0; an empty map is plain 0-1 loss.
 
+**Ordinal levels** (`choice_order`): when choices are ordered (Jev Score, severity
+tiers), plain equality loss is wrong. With `choice_order` low→high, an automatic
+miss is only the **under-rate** gap `rank(true) - rank(pred) > under_rate_tolerance`
+(default 1: off by one level is allowed; off by two or more is an error).
+Over-rating never counts as certificate risk (it costs money, not safety).
+Ordinal and `severity` are mutually exclusive.
+
 The contract is scenario data, not code: code review, ticket triage, and agent
 tool-call confirmation are all expressed with the same schema.
 """
@@ -74,6 +81,23 @@ class DecisionContract(BaseModel):
     deep review?"), whose answer is P(yes). Only valid with exactly two choices.
     """
 
+    choice_order: list[str] | None = None
+    """
+    Ordered choice labels, **low → high** (e.g. skip < shallow < deep < human).
+
+    When set, CRC / gate loss uses ordinal under-rating instead of equality.
+    Must list every contract choice exactly once. Part of the certificate.
+    """
+
+    under_rate_tolerance: int = Field(default=1, ge=0)
+    """
+    Largest under-rate gap that is still not an error.
+
+    Error iff `rank(true) - rank(pred) > under_rate_tolerance`. Default 1 means
+    missing by one level is allowed; missing by two or more is a miss. Only
+    used when `choice_order` is set. Over-rating is never a miss.
+    """
+
     @model_validator(mode="after")
     def _check_consistency(self) -> DecisionContract:
         if len(set(self.choices)) != len(self.choices):
@@ -114,6 +138,26 @@ class DecisionContract(BaseModel):
                 raise ValueError(
                     f"contract {self.name!r}: yes_choice {self.yes_choice!r} not in choices"
                 )
+        if self.choice_order is not None:
+            if len(self.choice_order) != len(self.choices):
+                raise ValueError(
+                    f"contract {self.name!r}: choice_order must list every choice once "
+                    f"(got {len(self.choice_order)} labels, {len(self.choices)} choices)"
+                )
+            if len(set(self.choice_order)) != len(self.choice_order):
+                raise ValueError(f"contract {self.name!r}: choice_order has duplicates")
+            missing = sorted(set(self.choices) - set(self.choice_order))
+            extra = sorted(set(self.choice_order) - set(self.choices))
+            if missing or extra:
+                raise ValueError(
+                    f"contract {self.name!r}: choice_order must match choices "
+                    f"(missing={missing}, extra={extra})"
+                )
+            if self.severity:
+                raise ValueError(
+                    f"contract {self.name!r}: choice_order (ordinal under-rate loss) "
+                    "cannot be combined with severity; use one loss definition"
+                )
         return self
 
     @property
@@ -124,24 +168,61 @@ class DecisionContract(BaseModel):
     def escalate_choices(self) -> list[str]:
         return [c for c in self.choices if c not in self.auto_set]
 
+    @property
+    def is_ordinal(self) -> bool:
+        return self.choice_order is not None
+
+    def rank_of(self, choice: str) -> int:
+        """0-based rank in `choice_order` (low → high)."""
+        if self.choice_order is None:
+            raise ValueError(f"contract {self.name!r} has no choice_order")
+        try:
+            return self.choice_order.index(choice)
+        except ValueError as exc:
+            raise ValueError(
+                f"contract {self.name!r}: {choice!r} not in choice_order"
+            ) from exc
+
     def miss_severity(self, label: str) -> float:
         """Loss mass of one automatic miss whose true label is `label`."""
         return float(self.severity.get(label, 1.0))
+
+    def miss_loss(self, prediction: str, label: str) -> float:
+        """
+        Per-example loss mass when the automatic path predicts `prediction`
+        and the true label is `label` (eligibility is applied elsewhere).
+
+        Ordinal: 1 iff under-rate gap exceeds `under_rate_tolerance`, else 0.
+        Else: 0 on exact match, else `miss_severity(label)`.
+        """
+        if self.choice_order is not None:
+            gap = self.rank_of(label) - self.rank_of(prediction)
+            return 1.0 if gap > self.under_rate_tolerance else 0.0
+        if prediction == label:
+            return 0.0
+        return self.miss_severity(label)
+
+    def pair_loss(self, case: DecisionCase, prediction: DecisionPrediction) -> float:
+        """`miss_loss` on a (case, prediction) pair — for CRC `loss_of` callbacks."""
+        return self.miss_loss(prediction.prediction, case.label)
 
     def loss_bound(self) -> float:
         """
         Upper bound B on per-example CRC loss.
 
-        Max severity over the choice set (missing keys count as 1). Empty
-        severity is plain 0-1 loss, so B = 1.
+        Ordinal under-rate loss is 0-1 (B = 1). With severity, B is the max
+        weight over the choice set (missing keys count as 1). Empty severity
+        without ordinal is plain 0-1 loss, so B = 1.
         """
+        if self.choice_order is not None:
+            return 1.0
         if not self.severity:
             return 1.0
         return max(self.miss_severity(choice) for choice in self.choices)
 
     def summary(self) -> dict[str, object]:
         """Compact form for report metadata."""
-        return {
+        out: dict[str, object] = {
             "name": self.name,
             "choices": list(self.choices),
             "auto_choices": list(self.auto_choices),
@@ -153,15 +234,21 @@ class DecisionContract(BaseModel):
             "instructions": self.instructions,
             "yes_choice": self.yes_choice,
         }
+        if self.choice_order is not None:
+            out["choice_order"] = list(self.choice_order)
+            out["under_rate_tolerance"] = self.under_rate_tolerance
+        return out
+
 
     def fingerprint(self) -> str:
         """
         SHA-256 over every field a certificate depends on.
 
-        Covers the choice set, the auto/escalate split, miss severities, and the
-        model input (descriptions, instructions, yes_choice). Costs, name and
-        description are excluded: they price or label decisions but change
-        neither what the model sees nor which errors count as risk.
+        Covers the choice set, the auto/escalate split, miss severities, ordinal
+        order / under-rate tolerance, and the model input (descriptions,
+        instructions, yes_choice). Costs, name and description are excluded:
+        they price or label decisions but change neither what the model sees nor
+        which errors count as risk.
         """
         payload = {
             "choices": list(self.choices),
@@ -170,6 +257,10 @@ class DecisionContract(BaseModel):
             "descriptions": dict(sorted(self.descriptions.items())),
             "instructions": self.instructions,
             "yes_choice": self.yes_choice,
+            "choice_order": list(self.choice_order) if self.choice_order else None,
+            "under_rate_tolerance": (
+                self.under_rate_tolerance if self.choice_order is not None else None
+            ),
         }
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()

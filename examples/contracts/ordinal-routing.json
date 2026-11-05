@@ -1,0 +1,15 @@
+{
+  "name": "ordinal-routing",
+  "description": "Ordered review depth. Auto may pick any level; certificate risk is under-rating the true need by more than one level.",
+  "choices": ["skip", "shallow", "deep", "human"],
+  "auto_choices": ["skip", "shallow", "deep", "human"],
+  "choice_order": ["skip", "shallow", "deep", "human"],
+  "under_rate_tolerance": 1,
+  "costs": {"skip": 0.0, "shallow": 0.2, "deep": 1.0, "human": 25.0},
+  "descriptions": {
+    "skip": "No further review needed",
+    "shallow": "Light automated or quick human glance",
+    "deep": "Full LLM or specialist review",
+    "human": "Mandatory human review"
+  }
+}

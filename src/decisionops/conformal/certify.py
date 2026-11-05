@@ -11,6 +11,7 @@ from decisionops.calibration.temperature import (
     fit_temperature,
 )
 from decisionops.conformal.risk_control import (
+    ORDINAL_QUANTITY,
     CRCResult,
     certify_selective_threshold,
     certify_threshold,
@@ -103,6 +104,11 @@ def run_certification(
                 "selective risk is an error *rate* among accepted cases and needs 0-1 "
                 "loss; contract severity is not supported with risk='selective'"
             )
+        if contract is not None and contract.is_ordinal:
+            raise ValueError(
+                "selective risk needs equality 0-1 loss among accepted cases; "
+                "ordinal under-rate loss is not supported with risk='selective'"
+            )
         if loss_bound not in (None, 1.0):
             raise ValueError(f"selective risk needs 0-1 loss, got loss_bound={loss_bound}")
         if confidence_level is None:
@@ -110,7 +116,14 @@ def run_certification(
     if contract is not None:
         contract.validate_data(cases, predictions)
     auto = auto_set_of(contract)
-    severity_of = contract.miss_severity if contract is not None else None
+    severity_of = None
+    loss_of = None
+    quantity = None
+    if contract is not None and contract.is_ordinal:
+        loss_of = contract.pair_loss
+        quantity = ORDINAL_QUANTITY
+    elif contract is not None and contract.severity:
+        severity_of = contract.miss_severity
     if loss_bound is None:
         loss_bound = contract.loss_bound() if contract is not None else 1.0
     elif loss_bound <= 0.0:
@@ -162,6 +175,8 @@ def run_certification(
                 loss_bound=loss_bound,
                 auto_choices=auto,
                 severity_of=severity_of,
+                loss_of=loss_of,
+                controlled_quantity=quantity,
                 confidence_level=confidence_level,
             )
         test_stats = None
@@ -172,6 +187,7 @@ def run_certification(
                 cert.threshold,
                 auto_choices=auto,
                 severity_of=severity_of,
+                loss_of=loss_of,
             )
             measured = "selective_risk" if risk == "selective" else "joint_error_rate"
             value = float(test_stats[measured])
@@ -182,7 +198,14 @@ def run_certification(
         )
 
     if contract is not None:
-        if contract.severity:
+        if contract.is_ordinal:
+            notes.append(
+                f"Contract {contract.name!r}: ordinal under-rate loss on order "
+                f"{contract.choice_order} with under_rate_tolerance="
+                f"{contract.under_rate_tolerance}; only auto choices "
+                f"{sorted(contract.auto_set)} count as risk. Over-rating is free."
+            )
+        elif contract.severity:
             notes.append(
                 f"Contract {contract.name!r}: only auto choices "
                 f"{sorted(contract.auto_set)} count as risk; miss severity "

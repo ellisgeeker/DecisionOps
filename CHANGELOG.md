@@ -20,6 +20,10 @@
 - Cascade `drift`: same certified-rate + confidence PSI/KS monitor; cascade
   windows also watch stage-1 / stage-2 shares with the same absolute-rate
   bands. CLI `decisionops drift --profile` accepts cascade profiles.
+- Ordinal under-rate risk for ordered choice sets (Score-style): contract
+  fields `choice_order` + `under_rate_tolerance` (default 1); CRC quantity
+  `ordinal_under_rate_joint_automated_error`; wired through `certify` /
+  `decide` / `recertify`. Example `examples/contracts/ordinal-routing.json`.
 - Docs: lock audit-window + low-volume **policy** (B3=R — no default pool cap;
   drift never auto-drops samples; low volume = customer-chosen levers, cascade
   ≈2× labels). No new rolling-window code. status + shadow-mode + README.

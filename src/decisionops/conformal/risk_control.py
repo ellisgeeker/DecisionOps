@@ -13,11 +13,12 @@ both the calibration set and the new sample, assuming exchangeability.
 
     L_i(lambda) = w(y_i) * 1 { confidence_i >= lambda  and  prediction_i != y_i }
 
-where `w(y) = severity.get(y, 1)` comes from the decision contract (default 1).
-So the certified quantity is the **joint (marginal) weighted automated error**:
-the average loss over *all* traffic that is auto-accepted *and* wrong, with
-misses weighted by the true label's severity. It is NOT the conditional
-selective risk (error rate *among* accepted samples) that
+where `w` comes from the decision contract: default 0-1 equality loss,
+optional true-label `severity`, or ordinal **under-rate** loss when
+`choice_order` is set (error iff rank(true)-rank(pred) > under_rate_tolerance;
+over-rating is free). So the certified quantity is the **joint (marginal)
+automated error** (possibly severity-weighted or ordinal). It is NOT the
+conditional selective risk (error rate *among* accepted samples) that
 `decisionops.selective` reports empirically.
 
 The two differ by coverage:
@@ -64,6 +65,7 @@ from decisionops.schemas import DecisionCase, DecisionPrediction
 
 GuaranteeKind = Literal["expectation", "high_probability"]
 SeverityOf = Callable[[str], float]
+LossOf = Callable[[DecisionCase, DecisionPrediction], float]
 
 
 class CRCResult(BaseModel):
@@ -168,16 +170,32 @@ def min_selective_accepted(alpha: float, confidence_level: float) -> int:
     return min_calibration_samples_hp(alpha, confidence_level)
 
 
-def _controlled_quantity(severity_of: SeverityOf | None) -> str:
+ORDINAL_QUANTITY = "ordinal_under_rate_joint_automated_error"
+WEIGHTED_QUANTITY = "weighted_joint_automated_error"
+JOINT_QUANTITY = "joint_automated_error_rate"
+
+
+def _controlled_quantity(
+    *,
+    severity_of: SeverityOf | None = None,
+    loss_of: LossOf | None = None,
+    ordinal: bool = False,
+) -> str:
+    if ordinal:
+        return ORDINAL_QUANTITY
+    if loss_of is not None and severity_of is None:
+        # Custom loss without the severity-only path; keep generic name unless ordinal.
+        return JOINT_QUANTITY
     if severity_of is None:
-        return "joint_automated_error_rate"
-    return "weighted_joint_automated_error"
+        return JOINT_QUANTITY
+    return WEIGHTED_QUANTITY
 
 
 def _confidence_and_wrong(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     auto_choices: frozenset[str] | None = None,
     severity_of: SeverityOf | None = None,
+    loss_of: LossOf | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Confidence and per-case loss mass.
@@ -188,10 +206,13 @@ def _confidence_and_wrong(
     candidate grid, while `n` still counts it — coverage and joint error stay
     fractions of *all* traffic.
 
-    A miss whose true label is `y` contributes `severity_of(y)` (default 1).
+    Loss mass: `loss_of(case, pred)` if given; else equality with optional
+    `severity_of(label)` on a miss (default weight 1).
     """
     conf = np.array([pred.confidence for _, pred in pairs], dtype=np.float64)
-    if severity_of is None:
+    if loss_of is not None:
+        wrong = np.array([float(loss_of(case, pred)) for case, pred in pairs], dtype=np.float64)
+    elif severity_of is None:
         wrong = np.array(
             [0.0 if pred.prediction == case.label else 1.0 for case, pred in pairs],
             dtype=np.float64,
@@ -318,6 +339,8 @@ def certify_threshold(
     loss_bound: float = 1.0,
     auto_choices: frozenset[str] | None = None,
     severity_of: SeverityOf | None = None,
+    loss_of: LossOf | None = None,
+    controlled_quantity: str | None = None,
     confidence_level: float | None = None,
 ) -> CRCResult:
     """
@@ -335,9 +358,10 @@ def certify_threshold(
     feasible one is returned, which maximises coverage subject to the bound.
 
     `auto_choices` (from a DecisionContract) restricts acceptance to the cheap
-    path. `severity_of(label)` weights a miss by its true label (default 1).
-    The loss stays non-increasing in lambda and bounded by `loss_bound`, so the
-    CRC guarantee is unchanged; escalations simply never count as loss.
+    path. Miss loss is `loss_of(case, pred)` when given, else equality with
+    optional `severity_of(label)`. The loss stays non-increasing in lambda and
+    bounded by `loss_bound`, so the CRC guarantee is unchanged; escalations
+    simply never count as loss.
     """
     if not pairs:
         raise ValueError("cannot certify on empty calibration set")
@@ -345,9 +369,15 @@ def certify_threshold(
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
     if loss_bound <= 0.0:
         raise ValueError(f"loss_bound must be > 0, got {loss_bound}")
+    if loss_of is not None and severity_of is not None:
+        raise ValueError("pass only one of loss_of and severity_of")
 
-    conf, wrong = _confidence_and_wrong(pairs, auto_choices, severity_of)
-    quantity = _controlled_quantity(severity_of)
+    conf, wrong = _confidence_and_wrong(
+        pairs, auto_choices, severity_of=severity_of, loss_of=loss_of
+    )
+    quantity = controlled_quantity or _controlled_quantity(
+        severity_of=severity_of, loss_of=loss_of
+    )
     if confidence_level is not None:
         _check_confidence_level(confidence_level)
         _assert_zero_one_loss(wrong, loss_bound)
@@ -439,7 +469,13 @@ def certify_threshold(
         notes.append(
             f"Certified threshold covers only {coverage:.1%} of calibration traffic."
         )
-    if severity_of is None:
+    if quantity == ORDINAL_QUANTITY:
+        notes.append(
+            "Certified quantity is the ordinal under-rate joint automated error "
+            "(auto-accepted AND under-rated beyond tolerance, over all traffic), "
+            "not conditional selective risk. Over-rating does not count."
+        )
+    elif severity_of is None and loss_of is None:
         notes.append(
             "Certified quantity is the joint automated error rate "
             "(auto-accepted AND wrong, over all traffic), not conditional selective risk."
@@ -478,17 +514,22 @@ def evaluate_certified_threshold(
     *,
     auto_choices: frozenset[str] | None = None,
     severity_of: SeverityOf | None = None,
+    loss_of: LossOf | None = None,
 ) -> dict[str, float | int]:
     """
     Measure a certified threshold on held-out data.
 
-    Reports the joint error (the certified quantity, severity-weighted when a
-    contract supplies weights) alongside coverage and empirical selective risk,
-    so the guarantee can be checked against reality.
+    Reports the joint error (the certified quantity, severity-weighted or
+    ordinal when the contract defines that loss) alongside coverage and
+    empirical selective risk, so the guarantee can be checked against reality.
     """
     if not pairs:
         raise ValueError("cannot evaluate on empty set")
-    conf, wrong = _confidence_and_wrong(pairs, auto_choices, severity_of)
+    if loss_of is not None and severity_of is not None:
+        raise ValueError("pass only one of loss_of and severity_of")
+    conf, wrong = _confidence_and_wrong(
+        pairs, auto_choices, severity_of=severity_of, loss_of=loss_of
+    )
     n = len(pairs)
     accepted = conf >= threshold
     n_accepted = int(accepted.sum())

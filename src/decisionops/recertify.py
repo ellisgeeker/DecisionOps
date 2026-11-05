@@ -32,6 +32,7 @@ from decisionops.conformal.cascade_risk import (
     stage_arrays_from_pairs,
 )
 from decisionops.conformal.risk_control import (
+    ORDINAL_QUANTITY,
     SELECTIVE_QUANTITY,
     CRCResult,
     certify_selective_threshold,
@@ -288,7 +289,14 @@ def run_recertification(
     auto = auto_set_of(contract) if contract is not None else (
         frozenset(profile.auto_choices) if profile.auto_choices is not None else None
     )
-    severity_of = contract.miss_severity if contract is not None else None
+    severity_of = None
+    loss_of = None
+    quantity = None
+    if contract is not None and contract.is_ordinal:
+        loss_of = contract.pair_loss
+        quantity = ORDINAL_QUANTITY
+    elif contract is not None and contract.severity:
+        severity_of = contract.miss_severity
     if loss_bound is None:
         if contract is not None:
             loss_bound = contract.loss_bound()
@@ -355,6 +363,8 @@ def run_recertification(
             loss_bound=loss_bound,
             auto_choices=auto,
             severity_of=severity_of,
+            loss_of=loss_of,
+            controlled_quantity=quantity,
             confidence_level=level,
         )
     notes.extend(cert.notes)
@@ -363,7 +373,11 @@ def run_recertification(
     held = None
     if cert.feasible and cert.threshold is not None:
         held = evaluate_certified_threshold(
-            pairs, cert.threshold, auto_choices=auto, severity_of=severity_of
+            pairs,
+            cert.threshold,
+            auto_choices=auto,
+            severity_of=severity_of,
+            loss_of=loss_of,
         )
         notes.append(
             "joint_error_rate on the audit sample is empirical (same rows that "
@@ -613,6 +627,11 @@ def run_cascade_recertification(
         contract = DecisionContract.model_validate(profile.contract)
     if contract is not None and contract.severity:
         raise ValueError("cascade recertify needs 0-1 loss; contract severity is not supported")
+    if contract is not None and contract.is_ordinal:
+        raise ValueError(
+            "cascade recertify needs equality 0-1 loss; ordinal under-rate "
+            "loss is not supported"
+        )
 
     pairs1, pairs2, join = build_cascade_audit_pairs(
         decisions=decisions,

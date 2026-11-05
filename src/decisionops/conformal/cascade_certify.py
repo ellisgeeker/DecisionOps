@@ -115,6 +115,11 @@ def run_cascade_certification(
         raise ValueError(
             "cascade certification needs 0-1 loss; contract severity is not supported"
         )
+    if contract.is_ordinal:
+        raise ValueError(
+            "cascade certification needs equality 0-1 loss; ordinal under-rate "
+            "loss is not supported"
+        )
     if not 0.0 <= temp_ratio < 1.0:
         raise ValueError(f"temp_ratio must be in [0, 1), got {temp_ratio}")
     if grid_size < 1:

@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-05 (window/low-volume policy locked; next is Score ordinal risk, then showcase)
+**Last updated:** 2026-11-05 (ordinal under-rate Score risk; next is showcase #7/#9/#10)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,12 +16,20 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: Score (ordinal) risk design** (error definition still open), then the
-#7/#9/#10 showcase bundle. Cascade label loop is complete
-(`certify-cascade` → `decide` → `recertify` → `drift`). Window / low-volume
-**policy** is decided below (no new rolling-window code this pass — operators
-still use optional `--as-of` / `--since`). Showcase pack still waits. PyPI is
-still undecided.
+**Next: showcase pack (#7/#9/#10).** Cascade label loop and ordinal Score risk
+are in. Window / low-volume policy is decided (docs only). PyPI still undecided.
+
+Done 2026-11-05 — ordinal under-rate risk (Score / ordered levels):
+
+- Contract: `choice_order` (low→high) + `under_rate_tolerance` (default 1).
+  Automatic miss iff `rank(true) - rank(pred) > k`; over-rating never counts.
+  Mutually exclusive with `severity`. Fingerprint covers both fields.
+- CRC quantity `ordinal_under_rate_joint_automated_error` (0-1 loss, HP ok).
+  `certify` / `decide` / `recertify` pick it up from the contract. Selective
+  risk and cascade paths refuse ordinal (equality 0-1 only there).
+- Example: `examples/contracts/ordinal-routing.json`. Tests:
+  `tests/test_ordinal_risk.py`. Jev live Score adapter still not wired —
+  offline JSONL with ordered choice labels is enough for the certificate path.
 
 Done 2026-11-05 — audit window + low-volume **product defaults** (docs only):
 
@@ -204,9 +212,9 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
    thresholds~~ — done 2026-11-04 (`certify-cascade`, findings §12).
    ~~Cascade `recertify`~~ — done 2026-11-05 (findings §13).
    ~~Cascade `drift`~~ — done 2026-11-05 (stage shares + shared rate bands).
-6. ~~Audit window + low-volume policy~~ — decided 2026-11-05 (B3=R, docs only;
-   see *Label strategy*). **Score (ordinal) risk design** next; then the
-   #7/#9/#10 showcase bundle.
+6. ~~Audit window + low-volume policy~~ — decided 2026-11-05 (B3=R, docs only).
+   ~~Score (ordinal) under-rate risk~~ — done 2026-11-05 (`choice_order`,
+   certify/decide/recertify). Then the #7/#9/#10 showcase bundle.
 
 Real-traffic validation follows the loop, so it tests the whole mechanism.
 Isotonic in CRC is **not** planned: it is monotone, so it does not reorder
@@ -528,7 +536,7 @@ Work items:
 | Selective prediction | `selective/` | Threshold sweep, risk-coverage, held-out threshold application |
 | Conformal Risk Control | `conformal/` | Angelopoulos et al.; validated (see below) |
 | Model comparison | `compare.py` | Shared split; ranks by CRC-certified coverage; empirical `!` kept as contrast |
-| Decision contract | `contract.py` | Closed-set choices, auto-set, costs, severity (true-label miss weight), yes_choice; asymmetric + weighted risk for CRC/gate |
+| Decision contract | `contract.py` | Closed-set choices, auto-set, costs, severity, `choice_order` + under-rate tolerance (ordinal), yes_choice; asymmetric / weighted / ordinal risk for CRC |
 | Offline cascade | `cascade.py` | Cost-saved vs joint miss-rate curve; oracle escalate pricing; needs contract costs; thresholds empirical |
 | Certified cascade | `conformal/cascade_risk.py`, `cascade_certify.py` | Two-stage LTT `(λ₁, λ₂)`; `CascadeProfile` + `decide_cascade`; CLI `certify-cascade` |
 | Runtime decide | `decide.py` | Single-model `CertificationProfile` or cascade `CascadeProfile`; audit sample |
@@ -568,10 +576,11 @@ in sync with the published checkpoint.
 Jev supports **Choice** (default) and **Noul** (`--jev-question noul`). Noul's
 P(yes) maps onto a binary contract via `yes_choice`, which is the natural form
 for routing ("does this need a deep review?"); descriptions become Noul's
-`true` / `false` criteria. **Score** is out of scope: its value is the ordering
-of its levels, so treating levels as unordered classes would make ECE, accuracy
-and the CRC loss misleading. Supporting it needs an ordinal risk design (e.g.
-"under-rating by more than one level is an error"), not just an adapter.
+`true` / `false` criteria. **Score / ordered levels** use a contract with
+`choice_order` (low→high) and `under_rate_tolerance` (default 1): CRC loss is
+under-rating beyond k levels only (over-rating free). Live Jev Score export is
+not wired yet — certify offline JSONL whose `prediction` / `label` are ordered
+choice ids. See `examples/contracts/ordinal-routing.json`.
 
 Earlier note (2026-09-26) claimed Noul "does not map onto a case's choice set".
 That was wrong: a binary case maps exactly, as above.
