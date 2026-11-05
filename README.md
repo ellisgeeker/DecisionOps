@@ -289,9 +289,13 @@ Notes:
 - One API call per case — start with `--limit` to check cost and latency.
 - Jev's own `confidence` field is recorded in metadata but not used; DecisionOps derives
   confidence from the distribution, like every provider.
-- **Choice** (default) and **Noul** are supported. **Score** is not: its value is the
-  ordering of its levels, and treating them as unordered classes would make every metric
-  misleading. It needs an ordinal risk design of its own.
+- **Choice** (default) and **Noul** are supported. **Ordered levels (Score-style)**
+  use a contract with `choice_order` (low→high) and optional
+  `under_rate_tolerance` (default 1): the certificate bounds automatic
+  **under-rating** beyond k levels; over-rating is not certificate risk.
+  Offline JSONL is enough; live Jev Score export is not wired yet. Example:
+  `examples/contracts/ordinal-routing.json`.
+
 
 ### Noul: calibrated yes/no routing
 
