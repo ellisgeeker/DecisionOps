@@ -170,3 +170,147 @@ def test_rejects_tiny_windows():
         raise AssertionError("expected ValueError")
     except ValueError as exc:
         assert "at least 30" in str(exc)
+
+
+# --- Cascade windows --------------------------------------------------------
+
+
+def _cascade_pool(n: int, seed: int, *, conf_shift: float = 0.0, stage1_lo: float = 0.55):
+    rng = np.random.default_rng(seed)
+    cases, p1, p2 = [], [], []
+    for i in range(n):
+        cid = str(i)
+        c1 = float(np.clip(rng.uniform(stage1_lo, 0.999) + conf_shift, 0.5, 0.999))
+        c2 = float(np.clip(rng.uniform(0.70, 0.999) + conf_shift * 0.5, 0.5, 0.999))
+        right = rng.random() < max(c1, c2) ** 2
+        label = "skip" if right else "deep"
+        cases.append(DecisionCase(id=cid, choices=["skip", "deep"], label=label))
+        p1.append(
+            DecisionPrediction(
+                id=cid,
+                prediction="skip",
+                probabilities={"skip": c1, "deep": 1.0 - c1},
+                model="cheap",
+            )
+        )
+        p2.append(
+            DecisionPrediction(
+                id=cid,
+                prediction="skip",
+                probabilities={"skip": c2, "deep": 1.0 - c2},
+                model="mid",
+            )
+        )
+    return cases, p1, p2
+
+
+def _cascade_profile_and_base(n=1200, seed=1, audit_rate=0.1):
+    from decisionops.conformal.cascade_certify import run_cascade_certification
+    from decisionops.decide import cascade_profile_from_report, decide_cascade_many
+
+    cases, p1, p2 = _cascade_pool(n, seed)
+    report = run_cascade_certification(
+        cases, p1, p2, ROUTING, alpha=0.10, confidence_level=0.9, calibrate=False, seed=3
+    )
+    assert report.certificate.feasible
+    profile = cascade_profile_from_report(report, audit_rate=audit_rate, audit_seed=7)
+    decisions = decide_cascade_many(p1, profile, p2)
+    return profile, decisions
+
+
+def test_cascade_window_reports_stage_shares():
+
+    profile, base = _cascade_profile_and_base(n=800, seed=40)
+    stats = window_stats(base)
+    assert stats.cascade is True
+    assert stats.stage1_rate is not None and stats.stage2_rate is not None
+    assert 0.0 <= stats.stage1_rate <= 1.0
+    assert 0.0 <= stats.stage2_rate <= 1.0
+    # Certified ≈ stage1 + stage2 (audit rows keep their stage).
+    assert abs(stats.certified_rate - (stats.stage1_rate + stats.stage2_rate)) < 1e-9
+
+
+def test_cascade_matched_windows_are_ok():
+    from decisionops.decide import decide_cascade_many
+
+    profile, base = _cascade_profile_and_base(n=1000, seed=50)
+    _, p1, p2 = _cascade_pool(1000, 51)
+    live = decide_cascade_many(p1, profile, p2)
+    report = run_drift_monitor(live, base, profile=profile, min_window=50)
+    assert report.verdict == "ok"
+    assert report.delta_stage1_rate is not None
+    assert abs(report.delta_certified_rate) < 0.05
+    assert abs(report.delta_stage1_rate) < 0.05
+    assert abs(report.delta_stage2_rate) < 0.05
+
+
+def test_cascade_stage_share_shift_alerts():
+    from decisionops.decide import CascadeStage, decide_cascade_many
+
+    profile, base = _cascade_profile_and_base(n=1200, seed=60)
+    # Force almost everything onto stage 2 by disabling stage 1 on a copy used
+    # only to *produce* live decisions — then compare those decisions to base.
+    # Real drift is traffic shift; here we simulate a routing-mix change.
+    live_profile = profile.model_copy(
+        update={
+            "stages": [
+                CascadeStage(
+                    provider=profile.stages[0].provider,
+                    model=profile.stages[0].model,
+                    temperature=profile.stages[0].temperature,
+                    threshold=0.999,  # almost never stage 1
+                ),
+                profile.stages[1],
+            ]
+        }
+    )
+    _, p1, p2 = _cascade_pool(1200, 61)
+    live = decide_cascade_many(p1, live_profile, p2)
+    # Compare without profile hash check (hashes differ by construction).
+    report = run_drift_monitor(live, base, profile=None, min_window=50)
+    assert report.baseline.cascade and report.live.cascade
+    assert report.delta_stage1_rate is not None
+    assert report.delta_stage1_rate < -0.05
+    assert report.verdict in {"watch", "recertify_suggested"}
+
+
+def test_cascade_rejects_mixed_with_single_model():
+    profile, cascade_dec = _cascade_profile_and_base(n=200, seed=70)
+    _, single_dec, _ = _profile_decisions(n=200, seed=71)
+    try:
+        run_drift_monitor(cascade_dec, single_dec, min_window=50)
+        raise AssertionError("expected ValueError")
+    except ValueError as exc:
+        assert "cascade" in str(exc).lower()
+
+
+def test_cli_drift_accepts_cascade_profile(tmp_path):
+    from decisionops.decide import decide_cascade_many, save_profile
+
+    profile, base = _cascade_profile_and_base(n=700, seed=80)
+    _, p1, p2 = _cascade_pool(700, 81)
+    live = decide_cascade_many(p1, profile, p2)
+    profile_path = save_profile(profile, tmp_path / "c.json")
+    base_path = tmp_path / "base.jsonl"
+    live_path = tmp_path / "live.jsonl"
+    _write_jsonl(base_path, base)
+    _write_jsonl(live_path, live)
+    out = tmp_path / "drift.json"
+    result = runner.invoke(
+        app,
+        [
+            "drift",
+            str(live_path),
+            "--baseline",
+            str(base_path),
+            "--profile",
+            str(profile_path),
+            "-o",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "stage1_share" in result.output
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["metadata"]["cascade"] is True
+    assert payload["delta_stage1_rate"] is not None

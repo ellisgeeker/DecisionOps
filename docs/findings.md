@@ -613,7 +613,7 @@ What it shows:
 Limits: one pack, two sklearn heads, all-auto demo contract (no escalate path,
 so no cost objective), 20 seeds, HP 90% only. Not a claim about Laya/Jev
 cascades or production routing contracts. Cascade `recertify` is measured in
-§13; cascade `drift` is not built yet.
+§13; cascade `drift` watches certified rate and stage shares (2026-11-05).
 
 ## 13. Cascade recertify restores α after drift, but needs more audit labels
 

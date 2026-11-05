@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-05 (cascade recertify + drift measure, findings §13; next is the window rule (B3) or Score, then showcase)
+**Last updated:** 2026-11-05 (cascade recertify + cascade drift; next is the window rule (B3) or Score, then showcase)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -17,9 +17,20 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 ## Pick up here tomorrow
 
 **Next: audit-window rule (B3 + low-volume options) or Score (ordinal) risk.**
-Order between the two is not decided. Cascade `drift` still refuses; decide
-before the showcase whether the demo uses a cascade (then cascade drift comes
-first). Showcase pack (#7/#9/#10) still waits. PyPI is still undecided.
+Order between the two is not decided. Cascade label loop is complete
+(`certify-cascade` → `decide` → `recertify` → `drift`). Showcase pack
+(#7/#9/#10) still waits. PyPI is still undecided.
+
+Done 2026-11-05 — cascade drift (minimal set):
+
+- Same label-free monitor as single-model: certified rate (reason in
+  {certified, audit}), confidence PSI + KS, same watch/alert bands.
+- Cascade windows also compare stage-1 / stage-2 shares (would-auto,
+  including audit draws) with those absolute-rate bands.
+- Refuses mixing cascade and single-model windows, or a profile kind that
+  disagrees with the decisions.
+- CLI `decisionops drift --profile` accepts cascade profiles. Tests in
+  `tests/test_drift.py`.
 
 Done 2026-11-05 — cascade recertify (decisions A1–A5, B, 2026-11-05):
 
@@ -166,9 +177,8 @@ Re-ordered plan (2026-10-23), algorithm and loop work before real traffic:
 5. ~~Certified conditional (selective) risk via Learn-Then-Test~~ — done
    2026-10-24 (`--risk selective`, findings §11). ~~Certified cascade
    thresholds~~ — done 2026-11-04 (`certify-cascade`, findings §12).
-   ~~Cascade `recertify`~~ — done 2026-11-05 (findings §13). Remaining
-   on this line: cascade `drift` (currently refuses cascade
-   profiles on purpose).
+   ~~Cascade `recertify`~~ — done 2026-11-05 (findings §13).
+   ~~Cascade `drift`~~ — done 2026-11-05 (stage shares + shared rate bands).
 6. Score (ordinal) risk design; audit window vs staleness; then the #7/#9/#10
    showcase bundle.
 
@@ -590,7 +600,7 @@ in tree.
 
 See **Roadmap** above for the ordered work. Beyond it:
 
-- **Cascade `drift`** — cascade profiles are refused on purpose until built (recertify is done).
+- ~~Cascade `recertify` / `drift`~~ — done 2026-11-05.
 - **Fine-tune Laya and re-measure** — model research, not on the product path.
 - **Isotonic in `compare` / `certify`** — gate has the contrast; CRC still uses
   temperature only, intentional for V1.

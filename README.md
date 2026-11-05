@@ -478,7 +478,7 @@ real. See [findings §12](docs/findings.md#12-certified-two-stage-cascade-on-ban
 the two-stage LTT on audit rows with frozen T₁/T₂ and the profile's own grids.
 It needs roughly twice the audit labels of a single model
 ([findings §13](docs/findings.md#13-cascade-recertify-restores-α-after-drift-but-needs-more-audit-labels)).
-`drift` does not accept cascade profiles yet.
+`drift` accepts cascade profiles too (certified rate + stage-1/2 shares).
 
 ## Comparison protocol
 

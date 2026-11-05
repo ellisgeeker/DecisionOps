@@ -2,9 +2,10 @@
 Label-free drift monitor for a live certification profile.
 
 Between recertifications, audit labels arrive slowly. This module watches the
-*behaviour* of `decide()` — certified rate and confidence distribution — against
-a baseline window, without needing outcomes. A shift is an alarm to raise
-`audit_rate` or run `recertify`, not a new certificate.
+*behaviour* of `decide()` / `decide_cascade()` — certified rate, confidence
+distribution, and for cascades the stage-1 / stage-2 share — against a baseline
+window, without needing outcomes. A shift is an alarm to raise `audit_rate` or
+run `recertify`, not a new certificate.
 
 **It cannot see concept drift.** If the model gets worse at the same
 confidence, the score distribution does not move and this monitor says `ok`
@@ -14,9 +15,9 @@ labels; use this monitor only to recertify *earlier*.
 
 **Certified rate vs automation rate.** `Decision.audit` forces some would-be
 AUTOs to escalate, so raw `action==auto` is pulled down by ~audit_rate.
-`reason in {certified, audit}` recovers the CRC acceptance rate and is
-comparable to `CertificationProfile.coverage_calibration`. Both are reported;
-verdicts key off the certified rate and confidence shift.
+`reason in {certified, audit}` recovers the CRC / cascade acceptance rate and is
+comparable to `coverage_calibration`. Both are reported; verdicts key off the
+certified rate, confidence shift, and (for cascades) stage shares.
 """
 
 from __future__ import annotations
@@ -28,14 +29,14 @@ import numpy as np
 from pydantic import BaseModel, Field
 from scipy.stats import ks_2samp
 
-from decisionops.decide import CertificationProfile, Decision, require_single_profile
+from decisionops.decide import AnyProfile, CascadeProfile, Decision
 
 DriftVerdict = Literal["ok", "watch", "recertify_suggested"]
 
 # Population Stability Index bands (industry rule of thumb for scorecards).
 _PSI_WATCH = 0.10
 _PSI_ALERT = 0.25
-# Absolute gap in certified-rate (fraction of traffic).
+# Absolute gap in certified-rate / stage share (fraction of traffic).
 _RATE_WATCH = 0.05
 _RATE_ALERT = 0.10
 # Two-sample KS on confidence: small p => distributions differ.
@@ -50,7 +51,7 @@ class WindowStats(BaseModel):
 
     n: int
     certified_rate: float
-    """Share with reason in {certified, audit} — CRC acceptance, audit-invariant."""
+    """Share with reason in {certified, audit} — acceptance rate, audit-invariant."""
 
     auto_rate: float
     """Share with action==auto (after audit forced escalations)."""
@@ -61,6 +62,14 @@ class WindowStats(BaseModel):
     conf_p90: float
     reason_counts: dict[str, int] = Field(default_factory=dict)
     choice_rates: dict[str, float] = Field(default_factory=dict)
+    cascade: bool = False
+    """True when any decision carries a cascade `stage` field."""
+
+    stage1_rate: float | None = None
+    """Share that stage 1 would auto-execute (includes audit draws). None if not cascade."""
+
+    stage2_rate: float | None = None
+    """Share that stage 2 would auto-execute (includes audit draws). None if not cascade."""
 
 
 class DriftReport(BaseModel):
@@ -72,6 +81,8 @@ class DriftReport(BaseModel):
     live: WindowStats
     delta_certified_rate: float
     delta_auto_rate: float
+    delta_stage1_rate: float | None = None
+    delta_stage2_rate: float | None = None
     psi_confidence: float | None = None
     """Population Stability Index on confidence bins; None if baseline too thin."""
 
@@ -98,9 +109,17 @@ def window_stats(decisions: list[Decision]) -> WindowStats:
     conf = _confidence_array(decisions)
     reasons: dict[str, int] = {}
     choices: dict[str, int] = {}
+    n_stage1 = n_stage2 = 0
+    cascade = False
     for d in decisions:
         reasons[d.reason] = reasons.get(d.reason, 0) + 1
         choices[d.choice] = choices.get(d.choice, 0) + 1
+        if d.stage is not None:
+            cascade = True
+            if d.stage == 1:
+                n_stage1 += 1
+            elif d.stage == 2:
+                n_stage2 += 1
     choice_rates = {k: v / n for k, v in sorted(choices.items())}
     return WindowStats(
         n=n,
@@ -112,6 +131,9 @@ def window_stats(decisions: list[Decision]) -> WindowStats:
         conf_p90=float(np.quantile(conf, 0.90)),
         reason_counts=dict(sorted(reasons.items())),
         choice_rates=choice_rates,
+        cascade=cascade,
+        stage1_rate=(n_stage1 / n) if cascade else None,
+        stage2_rate=(n_stage2 / n) if cascade else None,
     )
 
 
@@ -152,10 +174,16 @@ def _verdict(
     delta_certified: float,
     psi: float | None,
     ks_p: float | None,
+    rate_deltas: list[float] | None = None,
 ) -> DriftVerdict:
     abs_delta = abs(delta_certified)
     alert = abs_delta >= _RATE_ALERT
     watch = abs_delta >= _RATE_WATCH
+    if rate_deltas:
+        for d in rate_deltas:
+            abs_d = abs(d)
+            alert = alert or abs_d >= _RATE_ALERT
+            watch = watch or abs_d >= _RATE_WATCH
     if psi is not None:
         alert = alert or psi >= _PSI_ALERT
         watch = watch or psi >= _PSI_WATCH
@@ -173,20 +201,21 @@ def run_drift_monitor(
     live: list[Decision],
     baseline: list[Decision],
     *,
-    profile: CertificationProfile | None = None,
+    profile: AnyProfile | None = None,
     n_bins: int = 10,
     min_window: int = 30,
 ) -> DriftReport:
     """
     Compare a live decisions window to a baseline window.
 
-    Both windows should come from the same profile (same threshold / audit_rate)
-    so the comparison is behavioural drift, not a config change. When `profile`
-    is set, its `coverage_calibration` is attached as context and a note is added
-    if the baseline certified rate disagrees with it substantially.
+    Both windows should come from the same profile (same thresholds / audit_rate)
+    so the comparison is behavioural drift, not a config change. Works for
+    single-model and cascade profiles. Cascade windows also compare stage-1 /
+    stage-2 shares with the same absolute-rate bands as certified rate.
+
+    When `profile` is set, its `coverage_calibration` is attached as context and
+    a note is added if the baseline certified rate disagrees with it substantially.
     """
-    if profile is not None:
-        profile = require_single_profile(profile, what="drift")
     if len(live) < min_window:
         raise ValueError(
             f"live window has {len(live)} decisions; need at least {min_window}"
@@ -195,13 +224,33 @@ def run_drift_monitor(
         raise ValueError(
             f"baseline window has {len(baseline)} decisions; need at least {min_window}"
         )
-    if profile is not None:
-        profile = require_single_profile(profile, what="drift")
 
     base_stats = window_stats(baseline)
     live_stats = window_stats(live)
+    if base_stats.cascade != live_stats.cascade:
+        raise ValueError(
+            "baseline and live windows disagree on cascade vs single-model "
+            f"(baseline cascade={base_stats.cascade}, live cascade={live_stats.cascade}); "
+            "compare windows from one profile kind"
+        )
+    if profile is not None:
+        is_cascade = isinstance(profile, CascadeProfile)
+        if is_cascade != base_stats.cascade:
+            raise ValueError(
+                f"profile kind {'cascade' if is_cascade else 'single-model'} does not "
+                f"match the decisions windows (cascade={base_stats.cascade})"
+            )
+
     delta_c = live_stats.certified_rate - base_stats.certified_rate
     delta_a = live_stats.auto_rate - base_stats.auto_rate
+    delta_s1 = delta_s2 = None
+    stage_deltas: list[float] = []
+    if base_stats.cascade and live_stats.cascade:
+        assert base_stats.stage1_rate is not None and live_stats.stage1_rate is not None
+        assert base_stats.stage2_rate is not None and live_stats.stage2_rate is not None
+        delta_s1 = live_stats.stage1_rate - base_stats.stage1_rate
+        delta_s2 = live_stats.stage2_rate - base_stats.stage2_rate
+        stage_deltas = [delta_s1, delta_s2]
 
     notes: list[str] = [
         "Label-free monitor: a shift is an alarm, not a certificate. "
@@ -209,6 +258,11 @@ def run_drift_monitor(
         "Certified rate counts reason in {certified, audit}, so audit sampling "
         "does not bias the comparison to profile coverage.",
     ]
+    if base_stats.cascade:
+        notes.append(
+            "Cascade windows also watch stage-1 / stage-2 shares (would-auto, "
+            "including audit draws) with the same absolute-rate bands."
+        )
 
     psi: float | None
     ks_stat: float | None
@@ -241,7 +295,9 @@ def run_drift_monitor(
                 f"monitor profile is {profile_hash}. Compare windows from one profile."
             )
 
-    verdict = _verdict(delta_certified=delta_c, psi=psi, ks_p=ks_p)
+    verdict = _verdict(
+        delta_certified=delta_c, psi=psi, ks_p=ks_p, rate_deltas=stage_deltas or None
+    )
     if verdict == "ok":
         notes.append(
             "No material shift in certified rate or confidence distribution. This does "
@@ -270,6 +326,11 @@ def run_drift_monitor(
         f"Δ certified rate={delta_c:+.1%} "
         f"(watch≥{_RATE_WATCH:.0%}, alert≥{_RATE_ALERT:.0%})."
     )
+    if delta_s1 is not None and delta_s2 is not None:
+        notes.append(
+            f"Δ stage1 share={delta_s1:+.1%}  Δ stage2 share={delta_s2:+.1%} "
+            f"(same bands as certified rate)."
+        )
 
     return DriftReport(
         verdict=verdict,
@@ -278,6 +339,8 @@ def run_drift_monitor(
         live=live_stats,
         delta_certified_rate=delta_c,
         delta_auto_rate=delta_a,
+        delta_stage1_rate=delta_s1,
+        delta_stage2_rate=delta_s2,
         psi_confidence=psi,
         ks_statistic=ks_stat,
         ks_pvalue=ks_p,
@@ -286,6 +349,7 @@ def run_drift_monitor(
         metadata={
             "n_bins": n_bins,
             "min_window": min_window,
+            "cascade": base_stats.cascade,
             "psi_watch": _PSI_WATCH,
             "psi_alert": _PSI_ALERT,
             "rate_watch": _RATE_WATCH,

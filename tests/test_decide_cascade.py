@@ -20,7 +20,6 @@ from decisionops.decide import (
     load_profile,
     save_profile,
 )
-from decisionops.drift import run_drift_monitor
 from decisionops.recertify import run_recertification
 from decisionops.schemas import DecisionPrediction
 
@@ -262,12 +261,10 @@ def test_cascade_profile_from_certificate():
     assert profile.contract_hash == ROUTING.fingerprint()
 
 
-def test_recertify_and_drift_refuse_cascade():
+def test_single_model_recertify_still_refuses_cascade():
     p = _profile()
-    with pytest.raises(ValueError, match="recertify does not support cascade"):
+    with pytest.raises(ValueError, match="run_cascade_recertification"):
         run_recertification(p, decisions=[], outcomes=[], predictions=[])  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="drift does not support cascade"):
-        run_drift_monitor([], [], profile=p)  # type: ignore[arg-type]
 
 
 def test_cli_decide_needs_two_prediction_files_for_cascade(tmp_path):

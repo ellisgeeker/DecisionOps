@@ -1460,7 +1460,7 @@ def drift_cmd(
         Path | None,
         typer.Option(
             "--profile",
-            help="Optional CertificationProfile for hash/coverage context.",
+            help="Optional profile JSON (single-model or cascade) for hash/coverage context.",
             exists=True,
             dir_okay=False,
         ),
@@ -1482,9 +1482,9 @@ def drift_cmd(
     Label-free drift monitor: compare live decide() behaviour to a baseline.
 
     Watches certified rate (reason in {certified, audit}) and confidence
-    distribution (PSI + KS). A shift suggests raising audit_rate or running
-    recertify — it is not itself a certificate. Exit 2 on recertify_suggested,
-    1 on watch, 0 on ok.
+    distribution (PSI + KS). Cascade windows also watch stage-1 / stage-2
+    shares. A shift suggests raising audit_rate or running recertify — it is
+    not itself a certificate. Exit 2 on recertify_suggested, 1 on watch, 0 on ok.
     """
     if min_window < 2:
         raise typer.BadParameter("--min-window must be >= 2")
@@ -1492,15 +1492,10 @@ def drift_cmd(
         raise typer.BadParameter("--bins must be >= 2")
     try:
         loaded = load_profile(profile) if profile is not None else None
-        frozen = (
-            require_single_profile(loaded, what="decisionops drift")
-            if loaded is not None
-            else None
-        )
         report = run_drift_monitor(
             load_decisions(live),
             load_decisions(baseline),
-            profile=frozen,
+            profile=loaded,
             n_bins=bins,
             min_window=min_window,
         )

@@ -7,8 +7,7 @@
 - Certified two-stage cascade: `certify_cascade` / `run_cascade_certification`
   (Learn-Then-Test on `(λ₁, λ₂)`), `CascadeProfile`, `decide_cascade`, CLI
   `decisionops certify-cascade` and cascade-aware `decide` (two `-p`).
-  Empirical `cascade` is unchanged. `drift` refuses cascade profiles until
-  that path exists.
+  Empirical `cascade` is unchanged.
 - Cascade recertify: `run_cascade_recertification` and `decisionops recertify`
   with two `-p`. Audit rows only, frozen T₁/T₂, LTT re-run on the grids stored
   in the profile (`CascadeProfile.lambda1_grid` / `lambda2_grid`, plus
@@ -18,6 +17,9 @@
   restored risk below α (6/300 above, HP 90%); recertify needs ~2× the audit
   labels of a single model (infeasible on 85% of reps at n≈150).
   `scripts/measure_cascade_label_loop.py`.
+- Cascade `drift`: same certified-rate + confidence PSI/KS monitor; cascade
+  windows also watch stage-1 / stage-2 shares with the same absolute-rate
+  bands. CLI `decisionops drift --profile` accepts cascade profiles.
 - findings §12: BANKING77 cnb → char_lr, α=5%, HP 90%, 20 seeds — cascade
   feasible 20/20, mean test automation 80.2%, joint error 2.80%; char_lr alone
   86.1% / 3.76% (Bonferroni tax). `scripts/measure_cascade_banking77.py`.

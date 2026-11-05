@@ -726,6 +726,17 @@ def print_drift_report(report, console: Console | None = None) -> None:
         f"auto_rate:      baseline={b.auto_rate:.1%}  live={live.auto_rate:.1%}  "
         f"delta={report.delta_auto_rate:+.1%}"
     )
+    if b.cascade and live.cascade:
+        d1 = report.delta_stage1_rate if report.delta_stage1_rate is not None else 0.0
+        d2 = report.delta_stage2_rate if report.delta_stage2_rate is not None else 0.0
+        console.print(
+            f"stage1_share:   baseline={b.stage1_rate:.1%}  live={live.stage1_rate:.1%}  "
+            f"delta={d1:+.1%}"
+        )
+        console.print(
+            f"stage2_share:   baseline={b.stage2_rate:.1%}  live={live.stage2_rate:.1%}  "
+            f"delta={d2:+.1%}"
+        )
     conf_bits = []
     if report.psi_confidence is not None:
         conf_bits.append(f"PSI={report.psi_confidence:.3f}")
