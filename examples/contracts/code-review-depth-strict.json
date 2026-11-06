@@ -28,9 +28,9 @@
   },
   "instructions": "How much review does this pull request need before merging? Judge by what the change does, not by its title or size.",
   "descriptions": {
-    "skip": "No review needed: docs, comments, formatting, generated code, or a purely mechanical rename with no behaviour change.",
-    "shallow": "A quick look is enough: tests-only changes, renames, logging, patch dependency bumps, or non-production config.",
-    "deep": "Needs a careful technical review: changes logic, queries, caching, concurrency, retries, or error handling.",
-    "human": "Needs a responsible human to sign off: money, auth or permissions, personal data, irreversible migrations, secrets, or production infrastructure."
+    "skip": "No review needed: cannot change shipped behaviour. Docs, comments, formatting, generated code from an unchanged spec, mechanical renames or moves with identical values, dev-only tooling.",
+    "shallow": "A quick look is enough: touches shipped code or config but not production behaviour that matters. Tests, log or message text, metrics, type hints, patch bumps of shipped dependencies, staging or CI config, code behind a flag that is off.",
+    "deep": "Needs a careful technical review: changes production logic. Control flow, defaults, queries, caching, concurrency, retries, error handling, API behaviour.",
+    "human": "Needs a responsible human to sign off: money, auth or permissions, sessions, personal data, irreversible migrations, secrets, production infrastructure or security rules."
   }
 }

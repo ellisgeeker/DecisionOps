@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "alpha": 0.1,
+  "alpha": 0.05,
   "guarantee": "expectation",
   "confidence_level": null,
   "controlled_quantity": "ordinal_under_rate_joint_automated_error",
-  "threshold": 0.5038151538203742,
-  "temperature": 2.3159756169413024,
+  "threshold": 0.5696633280209115,
+  "temperature": 6.526584017531408,
   "provider": "jev",
   "model": "jev-1.14.0",
   "choices": [
@@ -20,7 +20,7 @@
     "deep",
     "human"
   ],
-  "contract_hash": "f6a542ce2050025820c24a00aedb4c2d8ef16f90abc4e4b391565dee926bcbad",
+  "contract_hash": "0b01eda02977305f74401631b8ec37cc08f9bdbec6658d19c937368687c7bcca",
   "contract": {
     "name": "code-review-depth-strict",
     "choices": [
@@ -44,10 +44,10 @@
     },
     "severity": {},
     "descriptions": {
-      "skip": "No review needed: docs, comments, formatting, generated code, or a purely mechanical rename with no behaviour change.",
-      "shallow": "A quick look is enough: tests-only changes, renames, logging, patch dependency bumps, or non-production config.",
-      "deep": "Needs a careful technical review: changes logic, queries, caching, concurrency, retries, or error handling.",
-      "human": "Needs a responsible human to sign off: money, auth or permissions, personal data, irreversible migrations, secrets, or production infrastructure."
+      "skip": "No review needed: cannot change shipped behaviour. Docs, comments, formatting, generated code from an unchanged spec, mechanical renames or moves with identical values, dev-only tooling.",
+      "shallow": "A quick look is enough: touches shipped code or config but not production behaviour that matters. Tests, log or message text, metrics, type hints, patch bumps of shipped dependencies, staging or CI config, code behind a flag that is off.",
+      "deep": "Needs a careful technical review: changes production logic. Control flow, defaults, queries, caching, concurrency, retries, error handling, API behaviour.",
+      "human": "Needs a responsible human to sign off: money, auth or permissions, sessions, personal data, irreversible migrations, secrets, production infrastructure or security rules."
     },
     "instructions": "How much review does this pull request need before merging? Judge by what the change does, not by its title or size.",
     "yes_choice": null,
@@ -63,15 +63,15 @@
   "audit_seed": 0,
   "n_calibration": 144,
   "n_temperature_fit": 36,
-  "crc_bound_value": 0.09655172413793103,
-  "coverage_calibration": 0.9652777777777778,
+  "crc_bound_value": 0.04827586206896552,
+  "coverage_calibration": 0.6111111111111112,
   "test": {
-    "threshold": 0.5038151538203742,
+    "threshold": 0.5696633280209115,
     "n_total": 420,
-    "n_accepted": 398,
-    "coverage": 0.9476190476190476,
-    "joint_error_rate": 0.08095238095238096,
-    "selective_risk": 0.08542713567839195
+    "n_accepted": 249,
+    "coverage": 0.5928571428571429,
+    "joint_error_rate": 0.01904761904761905,
+    "selective_risk": 0.0321285140562249
   },
   "split": {
     "seed": 42,

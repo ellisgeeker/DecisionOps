@@ -9,7 +9,7 @@
   "provider": "jev",
   "model": "jev-1.14.0",
   "calibrated": true,
-  "temperature": 2.3159756169413024,
+  "temperature": 6.526584017531408,
   "n_temperature_fit": 36,
   "levels": [
     {
@@ -18,21 +18,21 @@
         "guarantee": "expectation",
         "confidence_level": null,
         "controlled_quantity": "ordinal_under_rate_joint_automated_error",
-        "threshold": 0.5664226147853537,
+        "threshold": 0.5696633280209115,
         "feasible": true,
         "n_calibration": 144,
         "min_n_required": 19,
         "loss_bound": 1.0,
         "empirical_joint_error": 0.041666666666666664,
         "crc_bound_value": 0.04827586206896552,
-        "coverage_calibration": 0.8958333333333334,
-        "empirical_selective_risk_calibration": 0.046511627906976744,
-        "n_accepted_calibration": 129,
+        "coverage_calibration": 0.6111111111111112,
+        "empirical_selective_risk_calibration": 0.06818181818181818,
+        "n_accepted_calibration": 88,
         "notes": [
           "Certified quantity is the ordinal under-rate joint automated error (auto-accepted AND under-rated beyond tolerance, over all traffic), not conditional selective risk. Over-rating does not count."
         ],
         "metadata": {
-          "n_grid_candidates": 41,
+          "n_grid_candidates": 62,
           "auto_choices": [
             "deep",
             "human",
@@ -42,12 +42,12 @@
         }
       },
       "test": {
-        "threshold": 0.5664226147853537,
+        "threshold": 0.5696633280209115,
         "n_total": 420,
-        "n_accepted": 371,
-        "coverage": 0.8833333333333333,
-        "joint_error_rate": 0.0380952380952381,
-        "selective_risk": 0.0431266846361186
+        "n_accepted": 249,
+        "coverage": 0.5928571428571429,
+        "joint_error_rate": 0.01904761904761905,
+        "selective_risk": 0.0321285140562249
       },
       "bound_held_on_test": true
     },
@@ -57,21 +57,21 @@
         "guarantee": "expectation",
         "confidence_level": null,
         "controlled_quantity": "ordinal_under_rate_joint_automated_error",
-        "threshold": 0.5038151538203742,
+        "threshold": 0.30816018584041754,
         "feasible": true,
         "n_calibration": 144,
         "min_n_required": 9,
         "loss_bound": 1.0,
-        "empirical_joint_error": 0.09027777777777778,
-        "crc_bound_value": 0.09655172413793103,
-        "coverage_calibration": 0.9652777777777778,
-        "empirical_selective_risk_calibration": 0.09352517985611511,
-        "n_accepted_calibration": 139,
+        "empirical_joint_error": 0.0763888888888889,
+        "crc_bound_value": 0.08275862068965517,
+        "coverage_calibration": 1.0,
+        "empirical_selective_risk_calibration": 0.0763888888888889,
+        "n_accepted_calibration": 144,
         "notes": [
           "Certified quantity is the ordinal under-rate joint automated error (auto-accepted AND under-rated beyond tolerance, over all traffic), not conditional selective risk. Over-rating does not count."
         ],
         "metadata": {
-          "n_grid_candidates": 41,
+          "n_grid_candidates": 62,
           "auto_choices": [
             "deep",
             "human",
@@ -81,18 +81,18 @@
         }
       },
       "test": {
-        "threshold": 0.5038151538203742,
+        "threshold": 0.30816018584041754,
         "n_total": 420,
-        "n_accepted": 398,
-        "coverage": 0.9476190476190476,
-        "joint_error_rate": 0.08095238095238096,
-        "selective_risk": 0.08542713567839195
+        "n_accepted": 420,
+        "coverage": 1.0,
+        "joint_error_rate": 0.04285714285714286,
+        "selective_risk": 0.04285714285714286
       },
       "bound_held_on_test": true
     }
   ],
   "notes": [
-    "Temperature T=2.3160 fit on 36 held-out samples, disjoint from the 144 used for CRC.",
+    "Temperature T=6.5266 fit on 36 held-out samples, disjoint from the 144 used for CRC.",
     "Contract 'code-review-depth-strict': ordinal under-rate loss on order ['skip', 'shallow', 'deep', 'human'] with under_rate_tolerance=0; only auto choices ['deep', 'human', 'shallow', 'skip'] count as risk. Over-rating is free.",
     "Certified quantity is the ordinal under-rate joint automated error, not conditional selective risk. Assumes exchangeability.",
     "CRC guarantee is on E[loss], marginal over calibration and test draws.",
@@ -132,10 +132,10 @@
       },
       "severity": {},
       "descriptions": {
-        "skip": "No review needed: docs, comments, formatting, generated code, or a purely mechanical rename with no behaviour change.",
-        "shallow": "A quick look is enough: tests-only changes, renames, logging, patch dependency bumps, or non-production config.",
-        "deep": "Needs a careful technical review: changes logic, queries, caching, concurrency, retries, or error handling.",
-        "human": "Needs a responsible human to sign off: money, auth or permissions, personal data, irreversible migrations, secrets, or production infrastructure."
+        "skip": "No review needed: cannot change shipped behaviour. Docs, comments, formatting, generated code from an unchanged spec, mechanical renames or moves with identical values, dev-only tooling.",
+        "shallow": "A quick look is enough: touches shipped code or config but not production behaviour that matters. Tests, log or message text, metrics, type hints, patch bumps of shipped dependencies, staging or CI config, code behind a flag that is off.",
+        "deep": "Needs a careful technical review: changes production logic. Control flow, defaults, queries, caching, concurrency, retries, error handling, API behaviour.",
+        "human": "Needs a responsible human to sign off: money, auth or permissions, sessions, personal data, irreversible migrations, secrets, production infrastructure or security rules."
       },
       "instructions": "How much review does this pull request need before merging? Judge by what the change does, not by its title or size.",
       "yes_choice": null,
@@ -147,6 +147,6 @@
       ],
       "under_rate_tolerance": 0
     },
-    "contract_hash": "f6a542ce2050025820c24a00aedb4c2d8ef16f90abc4e4b391565dee926bcbad"
+    "contract_hash": "0b01eda02977305f74401631b8ec37cc08f9bdbec6658d19c937368687c7bcca"
   }
 }

@@ -46,10 +46,10 @@
           Guarantee: E[joint error] ≤ α in expectation (CRC).</p>
         <table>
           <thead><tr><th>α</th><th>λ̂</th><th>Coverage (test)</th><th>Joint err</th><th>Sel. risk</th><th>≤ α this split?</th></tr></thead>
-          <tbody><tr><td>5%</td><td>0.3656</td><td>100.0%</td><td>0.0000</td><td>0.0000</td><td>yes</td></tr><tr><td>10%</td><td>0.3656</td><td>100.0%</td><td>0.0000</td><td>0.0000</td><td>yes</td></tr></tbody>
+          <tbody><tr><td>5%</td><td>0.3082</td><td>100.0%</td><td>0.0286</td><td>0.0286</td><td>yes</td></tr><tr><td>10%</td><td>0.3082</td><td>100.0%</td><td>0.0286</td><td>0.0286</td><td>yes</td></tr></tbody>
         </table>
         <p class="hint">A single split landing above α is expected roughly half the time.</p>
-        <ul class="notes"><li>Temperature T=2.3160 fit on 36 held-out samples, disjoint from the 144 used for CRC.</li><li>Contract &#x27;code-review-depth&#x27;: ordinal under-rate loss on order [&#x27;skip&#x27;, &#x27;shallow&#x27;, &#x27;deep&#x27;, &#x27;human&#x27;] with under_rate_tolerance=1; only auto choices [&#x27;deep&#x27;, &#x27;human&#x27;, &#x27;shallow&#x27;, &#x27;skip&#x27;] count as risk. Over-rating is free.</li><li>Certified quantity is the ordinal under-rate joint automated error, not conditional selective risk. Assumes exchangeability.</li><li>CRC guarantee is on E[loss], marginal over calibration and test draws.</li><li>A single test split exceeding alpha is expected roughly half the time: the smallest feasible lambda puts true risk just under alpha. Validate by averaging over seeds.</li></ul>
+        <ul class="notes"><li>Temperature T=6.5266 fit on 36 held-out samples, disjoint from the 144 used for CRC.</li><li>Contract &#x27;code-review-depth&#x27;: ordinal under-rate loss on order [&#x27;skip&#x27;, &#x27;shallow&#x27;, &#x27;deep&#x27;, &#x27;human&#x27;] with under_rate_tolerance=1; only auto choices [&#x27;deep&#x27;, &#x27;human&#x27;, &#x27;shallow&#x27;, &#x27;skip&#x27;] count as risk. Over-rating is free.</li><li>Certified quantity is the ordinal under-rate joint automated error, not conditional selective risk. Assumes exchangeability.</li><li>CRC guarantee is on E[loss], marginal over calibration and test draws.</li><li>A single test split exceeding alpha is expected roughly half the time: the smallest feasible lambda puts true risk just under alpha. Validate by averaging over seeds.</li></ul>
         
 </body>
 </html>

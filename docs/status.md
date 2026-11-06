@@ -24,17 +24,23 @@ below). Then 0.1.2. PyPI still undecided.
 Done 2026-11-06 — code-review showcase pack (#7), `examples/code-review/`:
 
 - 600 synthetic PRs from `scripts/build_code_review_pack.py` (seed 7,
-  deterministic), labels skip/shallow/deep/human derived from a simulated
-  outcome; ~20% misleading on the surface. `LABELLING.md` is the labelling guide.
-- Scored once with live Jev Score (`jev-1.14.0`, 600 calls, 207 ms/case);
-  predictions committed so the pack runs offline.
-- Jev: 82.3% exact; every error a skip/shallow swap; deep/human 100%.
-- Two contracts on the same predictions. `code-review-depth` (tolerance 1):
-  0 misses, certificate = full automation (threshold at the minimum confidence).
-  `code-review-depth-strict` (tolerance 0): 71 misses, α=10% threshold 0.504,
-  test coverage 94.8% / joint error 8.1% (30-seed mean 7.9%); `decide` holds 29
-  PRs below threshold (23 real misses), 47 high-confidence misses stay auto.
-- Caveat: the synthetic deep/human cues are easy. Real PRs will be harder.
+  deterministic, 100 distinct descriptions). Labels follow the contract rubric
+  exactly; kinds: plain 476, hard 100 (surface misleads), surprise 24 (looks
+  skip/shallow, broke after merge, labelled deep). `LABELLING.md` is the guide.
+- First cut (0678caa) was wrong: its labels contradicted its own rubric
+  (mechanical renames labelled shallow, dev tooling labelled skip), so all 106
+  Jev errors were label noise. Fixed by rewriting rubric and labels from one
+  rule set and re-scoring.
+- Live Jev Score (`jev-1.14.0`, 600 calls): 94.2% exact; plain 97.7%, hard 100%,
+  surprise 0% (correct reading of the text; that risk is invisible).
+- Profiles at α=5%. Tolerance 1: 18 misses (all surprises, 3.0%) < α, so the
+  threshold sits at the minimum confidence: full automation, held-out joint
+  error 2.9% (30-seed mean 2.9%). Tolerance 0: 32 misses (5.3%) > α, threshold
+  0.570, `decide` holds 240 of 600 to catch 16 misses; held-out error 1.9%
+  (30-seed mean 3.9%, coverage 78%). Confident misses make a confidence gate
+  expensive: that is the honest cost of tolerance 0.
+- Caveat: synthetic cues are cleaner than real PRs. Next evidence step is real
+  PR history (reverts / incident-linked PRs as labels).
 - #9 decided 2026-11-06: execution-layer LLMs live in the calling application,
   not in DecisionOps. The library returns `auto` + level or `escalate`.
 

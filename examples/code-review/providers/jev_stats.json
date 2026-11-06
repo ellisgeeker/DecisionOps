@@ -6,8 +6,8 @@
   "models_served": [
     "jev-1.14.0"
   ],
-  "accuracy": 0.8233,
-  "mean_max_prob": 0.9361,
+  "accuracy": 0.9417,
+  "mean_max_prob": 0.9146,
   "contract": {
     "name": "code-review-depth",
     "choices": [
@@ -31,10 +31,10 @@
     },
     "severity": {},
     "descriptions": {
-      "skip": "No review needed: docs, comments, formatting, generated code, or a purely mechanical rename with no behaviour change.",
-      "shallow": "A quick look is enough: tests-only changes, renames, logging, patch dependency bumps, or non-production config.",
-      "deep": "Needs a careful technical review: changes logic, queries, caching, concurrency, retries, or error handling.",
-      "human": "Needs a responsible human to sign off: money, auth or permissions, personal data, irreversible migrations, secrets, or production infrastructure."
+      "skip": "No review needed: cannot change shipped behaviour. Docs, comments, formatting, generated code from an unchanged spec, mechanical renames or moves with identical values, dev-only tooling.",
+      "shallow": "A quick look is enough: touches shipped code or config but not production behaviour that matters. Tests, log or message text, metrics, type hints, patch bumps of shipped dependencies, staging or CI config, code behind a flag that is off.",
+      "deep": "Needs a careful technical review: changes production logic. Control flow, defaults, queries, caching, concurrency, retries, error handling, API behaviour.",
+      "human": "Needs a responsible human to sign off: money, auth or permissions, sessions, personal data, irreversible migrations, secrets, production infrastructure or security rules."
     },
     "instructions": "How much review does this pull request need before merging? Judge by what the change does, not by its title or size.",
     "yes_choice": null,
@@ -46,8 +46,8 @@
     ],
     "under_rate_tolerance": 1
   },
-  "seconds_total": 124.0,
-  "ms_per_case": 206.7,
+  "seconds_total": 127.4,
+  "ms_per_case": 212.3,
   "predictions": "examples/code-review/providers/jev.jsonl",
   "dataset_subset": "examples/code-review/providers/jev_dataset.jsonl"
 }

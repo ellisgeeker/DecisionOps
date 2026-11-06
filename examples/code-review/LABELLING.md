@@ -6,15 +6,17 @@ not what the model predicted. A certificate is only as good as these labels.
 
 ## Levels (low → high)
 
-| Level | Meaning | Typical changes |
+| Level | Rule | Typical changes |
 |---|---|---|
-| `skip` | No review needed | Docs, comments, formatting, generated code, mechanical rename with no behaviour change |
-| `shallow` | A quick look is enough | Tests only, renames, log lines, patch dependency bumps, non-production config |
-| `deep` | Careful technical review | Logic, queries, caching, concurrency, retries, error handling |
-| `human` | A responsible human must sign off | Money, auth / permissions, personal data, irreversible migrations, secrets, production infrastructure |
+| `skip` | Cannot change shipped behaviour | Docs, comments, formatting, generated code from an unchanged spec, mechanical renames or moves with identical values, dev-only tooling |
+| `shallow` | Touches shipped code or config, but not production behaviour that matters | Tests, log or message text, metrics, type hints, patch bumps of shipped dependencies, staging or CI config, code behind a flag that is off |
+| `deep` | Changes production logic | Control flow, defaults, queries, caching, concurrency, retries, error handling, API behaviour |
+| `human` | A responsible human must sign off | Money, auth / permissions, sessions, personal data, irreversible migrations, secrets, production infrastructure or security rules |
 
 Judge the substance, not the surface. A one-line "typo fix" inside a permission
-check is `human`. A 1,400-line IDE rename is `skip`.
+check is `human`. A 1,400-line IDE rename is `skip`. The contract sends these
+same rules to the model as its rubric; if the rubric and the labels disagree,
+the certificate measures the disagreement, not the model.
 
 ## Where the label comes from
 
@@ -59,5 +61,10 @@ biased sample. See [docs/shadow-mode.md](../../docs/shadow-mode.md).
 
 The 600 PRs here are synthetic. Each row's `metadata.outcome` records the
 simulated evidence (`no_issue`, `style_comment`, `bug_in_deep_review`,
-`incident_or_revert`), and `metadata.hard` marks the ~20% of cases whose title or
-size points the wrong way.
+`incident_or_revert`). `metadata.kind` is one of:
+
+- `plain` — the surface matches the substance;
+- `hard` (~17%) — the title, size or path points the wrong way;
+- `surprise` (~4%) — an ordinary-looking `skip` / `shallow` change that broke
+  something after merge, so it is labelled `deep`. `metadata.surface_level` is
+  what it looked like. Nothing in the PR reveals it.

@@ -4,8 +4,9 @@
 
 ### Added
 
-- Code-review showcase pack `examples/code-review/`: 600 synthetic PRs,
-  labelling guide, live Jev Score predictions, and certify/decide reports for an
+- Code-review showcase pack `examples/code-review/`: 600 synthetic PRs (plain,
+  misleading, and post-merge surprises), labelling guide whose rules are the
+  contract rubric, live Jev Score predictions, and certify/decide reports for an
   ordinal contract at tolerance 1 and 0 (`code-review-depth*.json`).
   `scripts/export_jev_predictions.py` gained `--pack code-review` and Score.
 
