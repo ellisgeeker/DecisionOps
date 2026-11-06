@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-05 (ordinal under-rate Score risk; next is showcase #7/#9/#10)
+**Last updated:** 2026-11-06 (live Jev Score; code-review showcase pack #7; next is thin gate #10)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,8 +16,27 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: showcase pack (#7/#9/#10).** Cascade label loop and ordinal Score risk
-are in. Window / low-volume policy is decided (docs only). PyPI still undecided.
+**Next: thin gate (#10).** A sample GitHub Action that scores a PR with Jev
+Score, runs `decide` on the committed profile, and labels the PR with the route.
+The escalate branch is left to the calling app (#9 is not library work: see
+below). Then 0.1.2. PyPI still undecided.
+
+Done 2026-11-06 — code-review showcase pack (#7), `examples/code-review/`:
+
+- 600 synthetic PRs from `scripts/build_code_review_pack.py` (seed 7,
+  deterministic), labels skip/shallow/deep/human derived from a simulated
+  outcome; ~20% misleading on the surface. `LABELLING.md` is the labelling guide.
+- Scored once with live Jev Score (`jev-1.14.0`, 600 calls, 207 ms/case);
+  predictions committed so the pack runs offline.
+- Jev: 82.3% exact; every error a skip/shallow swap; deep/human 100%.
+- Two contracts on the same predictions. `code-review-depth` (tolerance 1):
+  0 misses, certificate = full automation (threshold at the minimum confidence).
+  `code-review-depth-strict` (tolerance 0): 71 misses, α=10% threshold 0.504,
+  test coverage 94.8% / joint error 8.1% (30-seed mean 7.9%); `decide` holds 29
+  PRs below threshold (23 real misses), 47 high-confidence misses stay auto.
+- Caveat: the synthetic deep/human cues are easy. Real PRs will be harder.
+- #9 decided 2026-11-06: execution-layer LLMs live in the calling application,
+  not in DecisionOps. The library returns `auto` + level or `escalate`.
 
 Done 2026-11-05 — ordinal under-rate risk (Score / ordered levels):
 

@@ -1,0 +1,36 @@
+{
+  "name": "code-review-depth-strict",
+  "description": "Strict variant of code-review-depth: any under-rating counts as a miss (under_rate_tolerance 0). Used in the showcase to show the certificate holding traffic back.",
+  "choices": [
+    "skip",
+    "shallow",
+    "deep",
+    "human"
+  ],
+  "auto_choices": [
+    "skip",
+    "shallow",
+    "deep",
+    "human"
+  ],
+  "choice_order": [
+    "skip",
+    "shallow",
+    "deep",
+    "human"
+  ],
+  "under_rate_tolerance": 0,
+  "costs": {
+    "skip": 0.0,
+    "shallow": 0.05,
+    "deep": 0.4,
+    "human": 25.0
+  },
+  "instructions": "How much review does this pull request need before merging? Judge by what the change does, not by its title or size.",
+  "descriptions": {
+    "skip": "No review needed: docs, comments, formatting, generated code, or a purely mechanical rename with no behaviour change.",
+    "shallow": "A quick look is enough: tests-only changes, renames, logging, patch dependency bumps, or non-production config.",
+    "deep": "Needs a careful technical review: changes logic, queries, caching, concurrency, retries, or error handling.",
+    "human": "Needs a responsible human to sign off: money, auth or permissions, personal data, irreversible migrations, secrets, or production infrastructure."
+  }
+}

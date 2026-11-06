@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "alpha": 0.1,
+  "guarantee": "expectation",
+  "confidence_level": null,
+  "controlled_quantity": "ordinal_under_rate_joint_automated_error",
+  "threshold": 0.5038151538203742,
+  "temperature": 2.3159756169413024,
+  "provider": "jev",
+  "model": "jev-1.14.0",
+  "choices": [
+    "skip",
+    "shallow",
+    "deep",
+    "human"
+  ],
+  "auto_choices": [
+    "skip",
+    "shallow",
+    "deep",
+    "human"
+  ],
+  "contract_hash": "f6a542ce2050025820c24a00aedb4c2d8ef16f90abc4e4b391565dee926bcbad",
+  "contract": {
+    "name": "code-review-depth-strict",
+    "choices": [
+      "skip",
+      "shallow",
+      "deep",
+      "human"
+    ],
+    "auto_choices": [
+      "skip",
+      "shallow",
+      "deep",
+      "human"
+    ],
+    "escalate_choices": [],
+    "costs": {
+      "skip": 0.0,
+      "shallow": 0.05,
+      "deep": 0.4,
+      "human": 25.0
+    },
+    "severity": {},
+    "descriptions": {
+      "skip": "No review needed: docs, comments, formatting, generated code, or a purely mechanical rename with no behaviour change.",
+      "shallow": "A quick look is enough: tests-only changes, renames, logging, patch dependency bumps, or non-production config.",
+      "deep": "Needs a careful technical review: changes logic, queries, caching, concurrency, retries, or error handling.",
+      "human": "Needs a responsible human to sign off: money, auth or permissions, personal data, irreversible migrations, secrets, or production infrastructure."
+    },
+    "instructions": "How much review does this pull request need before merging? Judge by what the change does, not by its title or size.",
+    "yes_choice": null,
+    "choice_order": [
+      "skip",
+      "shallow",
+      "deep",
+      "human"
+    ],
+    "under_rate_tolerance": 0
+  },
+  "audit_rate": 0.05,
+  "audit_seed": 0,
+  "n_calibration": 144,
+  "n_temperature_fit": 36,
+  "crc_bound_value": 0.09655172413793103,
+  "coverage_calibration": 0.9652777777777778,
+  "test": {
+    "threshold": 0.5038151538203742,
+    "n_total": 420,
+    "n_accepted": 398,
+    "coverage": 0.9476190476190476,
+    "joint_error_rate": 0.08095238095238096,
+    "selective_risk": 0.08542713567839195
+  },
+  "split": {
+    "seed": 42,
+    "cal_ratio": 0.3,
+    "n_total": 600,
+    "n_calibration": 144,
+    "n_test": 420,
+    "temp_ratio": 0.2,
+    "loss_bound": 1.0
+  },
+  "decisionops_version": "0.1.1"
+}

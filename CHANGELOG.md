@@ -4,6 +4,11 @@
 
 ### Added
 
+- Code-review showcase pack `examples/code-review/`: 600 synthetic PRs,
+  labelling guide, live Jev Score predictions, and certify/decide reports for an
+  ordinal contract at tolerance 1 and 0 (`code-review-depth*.json`).
+  `scripts/export_jev_predictions.py` gained `--pack code-review` and Score.
+
 - Jev Score: `--jev-question score` (default when the contract has
   `choice_order`). The rubric is the contract's ordered levels; Jev's
   per-level probabilities map back to choice ids, and a returned legend that

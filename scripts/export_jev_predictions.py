@@ -12,6 +12,8 @@ Usage:
   uv run python scripts/export_jev_predictions.py --pack toy --limit 20
   uv run python scripts/export_jev_predictions.py --pack banking77 --limit 200 \
     --contract examples/banking77/contract.json --model my-finetuned-jev
+  uv run python scripts/export_jev_predictions.py --pack code-review --limit 0 \
+    --contract examples/contracts/code-review-depth.json   # ordinal -> Score
 """
 
 from __future__ import annotations
@@ -35,7 +37,12 @@ def _rel(path: Path) -> str:
         return str(Path(path).resolve().relative_to(ROOT))
     except ValueError:
         return str(path)
-PACK_DIRS = {"banking77": "banking77", "clinc": "clinc_oos", "toy": "toy-routing"}
+PACK_DIRS = {
+    "banking77": "banking77",
+    "clinc": "clinc_oos",
+    "code-review": "code-review",
+    "toy": "toy-routing",
+}
 
 
 def _subsample(cases: list[DecisionCase], limit: int | None, seed: int) -> list[DecisionCase]:
@@ -62,9 +69,10 @@ def main() -> None:
     parser.add_argument("--base-url", default=None, help="Private / custom Jev endpoint")
     parser.add_argument(
         "--question",
-        choices=["choice", "noul"],
-        default="choice",
-        help="noul = calibrated yes/no; needs a contract with yes_choice",
+        choices=["choice", "noul", "score"],
+        default=None,
+        help="Default: score for an ordinal contract (choice_order), else choice. "
+        "noul = calibrated yes/no; needs a contract with yes_choice",
     )
     parser.add_argument(
         "--contract",
@@ -88,15 +96,20 @@ def main() -> None:
 
     contract = load_contract(args.contract) if args.contract else None
     yes_choice = contract.yes_choice if contract else None
-    if args.question == "noul" and yes_choice is None:
+    ordinal = contract is not None and contract.is_ordinal
+    question = args.question or ("score" if ordinal else "choice")
+    if question == "noul" and yes_choice is None:
         raise SystemExit("--question noul needs --contract with yes_choice")
+    if question == "score" and not ordinal:
+        raise SystemExit("--question score needs --contract with choice_order")
     provider = JevProvider(
         model=args.model,
         base_url=args.base_url,
         descriptions=contract.descriptions if contract else None,
         contract_instructions=contract.instructions if contract else None,
-        question_type=args.question,
+        question_type=question,
         yes_choice=yes_choice,
+        choice_order=contract.choice_order if ordinal else None,
     )
 
     t0 = time.perf_counter()
@@ -122,6 +135,7 @@ def main() -> None:
         "pack": args.pack,
         "n": len(preds),
         "model_requested": args.model,
+        "question_type": question,
         "models_served": sorted({p.model for p in preds if p.model}),
         "accuracy": round(correct / len(preds), 4),
         "mean_max_prob": round(sum(p.confidence for p in preds) / len(preds), 4),

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DecisionOps Certification</title>
+<style>
+    :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #5c5c5c; --bg: #f7f7f4; --card: #fff; --line: #222; --accent: #0b57d0; --warn: #a15c00; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #eee; --muted: #aaa; --bg: #161616; --card: #1e1e1e; --line: #ddd; --accent: #8ab4f8; --warn: #f5c16c; }
+    }
+    body { margin: 0 auto; max-width: 960px; padding: 24px 20px 64px; font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+    .sub, .hint, figcaption { color: var(--muted); }
+    .hint { font-size: 0.85rem; margin: 4px 0 0; }
+    table { border-collapse: collapse; width: 100%; background: var(--card); }
+    th, td { border-bottom: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); padding: 6px 10px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+    figure { margin: 0; background: var(--card); padding: 8px 8px 12px; }
+    svg { width: 100%; height: auto; }
+    svg line, svg polyline { stroke: var(--line); fill: none; stroke-width: 1; }
+    svg .diag { stroke-dasharray: 4 4; opacity: 0.6; }
+    svg .curve { stroke: var(--accent); stroke-width: 2; }
+    svg .target { stroke: var(--warn); stroke-dasharray: 3 3; }
+    svg .target-label { fill: var(--warn); font-size: 10px; }
+    svg .dot { fill: var(--accent); fill-opacity: 0.75; stroke: none; }
+    svg .dot-sm { fill: var(--accent); }
+    svg text { fill: var(--muted); font-size: 10px; }
+    svg .plot-bg { fill: transparent; stroke: none; }
+    .verdict { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+    .verdict.go { background: #d1f0d5; color: #0d5c1f; }
+    .verdict.watch { background: #ffe7c2; color: #7a4b00; }
+    .verdict.no-go { background: #ffd5d5; color: #8b1212; }
+    ul.notes { padding-left: 18px; }
+    </style>
+</head>
+<body>
+
+        <h1>DecisionOps certification (CRC)</h1>
+        <p class="sub">n_crc_cal=144 n_test=420
+          seed=42. Certified quantity is the
+          <strong>ordinal under-rate joint automated error</strong>: auto-accepted and under-rated by more than 0 level(s); over-rating is free. Not selective risk.
+          Guarantee: E[joint error] ≤ α in expectation (CRC).</p>
+        <table>
+          <thead><tr><th>α</th><th>λ̂</th><th>Coverage (test)</th><th>Joint err</th><th>Sel. risk</th><th>≤ α this split?</th></tr></thead>
+          <tbody><tr><td>5%</td><td>0.5664</td><td>88.3%</td><td>0.0381</td><td>0.0431</td><td>yes</td></tr><tr><td>10%</td><td>0.5038</td><td>94.8%</td><td>0.0810</td><td>0.0854</td><td>yes</td></tr></tbody>
+        </table>
+        <p class="hint">A single split landing above α is expected roughly half the time.</p>
+        <ul class="notes"><li>Temperature T=2.3160 fit on 36 held-out samples, disjoint from the 144 used for CRC.</li><li>Contract &#x27;code-review-depth-strict&#x27;: ordinal under-rate loss on order [&#x27;skip&#x27;, &#x27;shallow&#x27;, &#x27;deep&#x27;, &#x27;human&#x27;] with under_rate_tolerance=0; only auto choices [&#x27;deep&#x27;, &#x27;human&#x27;, &#x27;shallow&#x27;, &#x27;skip&#x27;] count as risk. Over-rating is free.</li><li>Certified quantity is the ordinal under-rate joint automated error, not conditional selective risk. Assumes exchangeability.</li><li>CRC guarantee is on E[loss], marginal over calibration and test draws.</li><li>A single test split exceeding alpha is expected roughly half the time: the smallest feasible lambda puts true risk just under alpha. Validate by averaging over seeds.</li></ul>
+        
+</body>
+</html>
