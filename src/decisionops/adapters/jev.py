@@ -1,7 +1,7 @@
 """
 TypeSafe Jev (hosted System One) decision model provider.
 
-Two question types:
+Three question types:
 
 - **choice** (default): one Choice question over the case's `choices`; Jev
   returns the winning choice plus a full distribution, which maps directly onto
@@ -11,8 +11,11 @@ Two question types:
   p = P(yes), mapped to {yes_choice: p, other_choice: 1 - p}. This is the
   natural form for routing ("does this need a deep review?").
 
-Score (an ordered 2–10 level scale) is not supported: its value is the ordering,
-and treating levels as unordered classes would make every metric misleading.
+- **score**: one ordered-rubric question for ordinal contracts. The rubric is
+  built from the contract's ``choice_order`` (low to high), so the levels are
+  ours, not Jev's: level i is ``choice_order[i]``. Jev returns a probability
+  per level, mapped back onto choice ids. The returned ``legend`` must echo the
+  rubric we sent; a mismatch is an error, never a silent re-mapping.
 
 Install extras first:
 
@@ -31,7 +34,7 @@ from decisionops.schemas import DecisionCase, DecisionPrediction
 
 DEFAULT_MODEL = "jev-latest"
 QUESTION_KEY = "decision"
-QUESTION_TYPES = ("choice", "noul")
+QUESTION_TYPES = ("choice", "noul", "score")
 
 
 def _require_sdk():
@@ -52,6 +55,14 @@ def build_criteria(
     return {choice: descriptions.get(choice) for choice in choices}
 
 
+def build_score_criteria(
+    choice_order: list[str], descriptions: dict[str, str] | None = None
+) -> list[str]:
+    """Ordered rubric, one entry per level from 0; the choice id when undescribed."""
+    descriptions = descriptions or {}
+    return [descriptions.get(choice) or choice for choice in choice_order]
+
+
 def resolve_instructions(
     case: DecisionCase, override: str | None = None, contract: str | None = None
 ) -> str:
@@ -60,7 +71,7 @@ def resolve_instructions(
 
 
 class JevProvider:
-    """Hosted Jev via the official TypeSafe SDK, one call per case (Choice or Noul)."""
+    """Hosted Jev via the official TypeSafe SDK, one call per case (Choice, Noul, Score)."""
 
     name = "jev"
 
@@ -75,6 +86,7 @@ class JevProvider:
         contract_instructions: str | None = None,
         question_type: str = "choice",
         yes_choice: str | None = None,
+        choice_order: list[str] | None = None,
         timeout_s: float = 60.0,
         client: Any | None = None,
     ) -> None:
@@ -84,10 +96,19 @@ class JevProvider:
             )
         if question_type == "noul" and not yes_choice:
             raise ValueError("noul needs yes_choice: the choice that means 'yes'")
+        if question_type == "score":
+            if not choice_order or len(choice_order) < 2:
+                raise ValueError(
+                    "score needs choice_order (low to high, at least 2 levels) "
+                    "from an ordinal contract"
+                )
+            if len(set(choice_order)) != len(choice_order):
+                raise ValueError(f"score choice_order has duplicates: {choice_order}")
         sdk = _require_sdk()
         self._sdk = sdk
         self.question_type = question_type
         self.yes_choice = yes_choice
+        self.choice_order = list(choice_order) if choice_order else None
         self.model = model
         self.base_url = base_url
         self.instructions = instructions
@@ -117,8 +138,24 @@ class JevProvider:
         no = next(c for c in case.choices if c != self.yes_choice)
         return self.yes_choice, no
 
+    def _score_levels(self, case: DecisionCase) -> list[str]:
+        """The rubric order; the case must offer exactly the ordered levels."""
+        assert self.choice_order is not None
+        if set(case.choices) != set(self.choice_order):
+            raise ValueError(
+                f"case {case.id!r}: score needs choices {self.choice_order}, "
+                f"got {case.choices}"
+            )
+        return self.choice_order
+
     def _question(self, case: DecisionCase):
         instructions = resolve_instructions(case, self.instructions, self.contract_instructions)
+        if self.question_type == "score":
+            levels = self._score_levels(case)
+            return self._sdk.Score(
+                instructions=instructions,
+                criteria=build_score_criteria(levels, self.descriptions),
+            )
         if self.question_type == "noul":
             yes, no = self._binary_labels(case)
             criteria = None
@@ -164,6 +201,33 @@ class JevProvider:
         # Ties go to "no" so a coin-flip answer is never read as a confident "yes".
         return (yes if p_yes > 0.5 else no), probs
 
+    def _score_distribution(
+        self, case: DecisionCase, answer: Any
+    ) -> tuple[str, dict[str, float]]:
+        levels = self._score_levels(case)
+        n = len(levels)
+        sent = build_score_criteria(levels, self.descriptions)
+        legend = {int(k): v for k, v in dict(getattr(answer, "legend", None) or {}).items()}
+        if legend and (sorted(legend) != list(range(n)) or any(
+            legend[i] != sent[i] for i in range(n)
+        )):
+            raise ValueError(
+                f"case {case.id!r}: Jev score legend {legend} does not match the "
+                f"{n}-level rubric sent {sent}; levels would be mis-mapped"
+            )
+        raw = {int(k): float(v) for k, v in dict(answer.probabilities).items()}
+        unexpected = sorted(set(raw) - set(range(n)))
+        if unexpected:
+            raise ValueError(
+                f"case {case.id!r}: Jev score returned levels outside 0..{n - 1}: {unexpected}"
+            )
+        probs = {levels[i]: raw.get(i, 0.0) for i in range(n)}
+        if not any(v > 0.0 for v in probs.values()):
+            raise ValueError(f"case {case.id!r}: Jev score probabilities are all zero")
+        # Ties go to the higher level: over-rating is never ordinal risk.
+        top = max(range(n), key=lambda i: (probs[levels[i]], i))
+        return levels[top], probs
+
     def _to_prediction(
         self, case: DecisionCase, response: Any, elapsed_ms: float
     ) -> DecisionPrediction:
@@ -173,6 +237,20 @@ class JevProvider:
         if self.question_type == "noul":
             prediction, probs = self._noul_distribution(case, answer)
             return self._build(case, response, elapsed_ms, prediction, probs, {"noul": answer.noul})
+        if self.question_type == "score":
+            prediction, probs = self._score_distribution(case, answer)
+            return self._build(
+                case,
+                response,
+                elapsed_ms,
+                prediction,
+                probs,
+                {
+                    "jev_score": getattr(answer, "score", None),
+                    "jev_confidence": getattr(answer, "confidence", None),
+                    "choice_order": list(self.choice_order or []),
+                },
+            )
         probs = {str(k): float(v) for k, v in dict(answer.probabilities).items()}
         unexpected = sorted(set(probs) - set(case.choices))
         if unexpected:

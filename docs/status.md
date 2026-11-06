@@ -28,8 +28,17 @@ Done 2026-11-05 — ordinal under-rate risk (Score / ordered levels):
   `certify` / `decide` / `recertify` pick it up from the contract. Selective
   risk and cascade paths refuse ordinal (equality 0-1 only there).
 - Example: `examples/contracts/ordinal-routing.json`. Tests:
-  `tests/test_ordinal_risk.py`. Jev live Score adapter still not wired —
-  offline JSONL with ordered choice labels is enough for the certificate path.
+  `tests/test_ordinal_risk.py`. Live Jev Score wired 2026-11-06 (below).
+
+Done 2026-11-06 — live Jev Score (`--jev-question score`, default for an
+ordinal contract): rubric = contract `choice_order` (+ `descriptions`), one Jev
+call per case like Choice/Noul. Per-level probabilities map back to choice ids;
+argmax with ties to the higher level; Jev `confidence` / expected `score` kept
+in metadata only. A returned `legend` that differs from the sent rubric is an
+error. Ordinal contract + `--jev-question choice` warns. Fake-client tests incl.
+CLI default and an ordinal CRC round trip. Live-verified 2026-11-06 on
+`jev-1.14.0` (2-case smoke: legend matched the sent rubric; typo → skip,
+payment-retry rewrite → human).
 
 Done 2026-11-05 — audit window + low-volume **product defaults** (docs only):
 
@@ -565,7 +574,7 @@ different `--provider`.
 |---|---|---|
 | Static file | `adapters/base.py` | done — offline predictions, used for CI |
 | Laya | `adapters/laya.py` | done — local inference; `--model-dir` for a fine-tuned checkpoint, `--no-builtin-temperature` |
-| TypeSafe Jev | `adapters/jev.py` | done — hosted Choice + Noul via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. Live-verified 2026-09-27 against `jev-1.13.0` (Choice + Noul). BANKING77 n=500 compare in [findings.md](findings.md) §8 |
+| TypeSafe Jev | `adapters/jev.py` | done — hosted Choice + Noul + Score (Score live-verified 2026-11-06 on `jev-1.14.0`) via `typesafe-sdk==0.7.2` (`--extra jev`); `--jev-model` (incl. fine-tuned ids), `--jev-base-url`; export via `scripts/export_jev_predictions.py`. Live-verified 2026-09-27 against `jev-1.13.0` (Choice + Noul). BANKING77 n=500 compare in [findings.md](findings.md) §8 |
 | Generic HTTP | `adapters/http.py` | done — POST `{id,state,question,choices}` (never `label`); `--http-url` required, `--http-token` / `DECISIONOPS_HTTP_TOKEN` optional Bearer; stdlib `urllib` |
 | sklearn heads | `scripts/export_multi_providers.py` | done — 4 heads with deliberately different probability behaviour |
 
@@ -578,9 +587,10 @@ P(yes) maps onto a binary contract via `yes_choice`, which is the natural form
 for routing ("does this need a deep review?"); descriptions become Noul's
 `true` / `false` criteria. **Score / ordered levels** use a contract with
 `choice_order` (low→high) and `under_rate_tolerance` (default 1): CRC loss is
-under-rating beyond k levels only (over-rating free). Live Jev Score export is
-not wired yet — certify offline JSONL whose `prediction` / `label` are ordered
-choice ids. See `examples/contracts/ordinal-routing.json`.
+under-rating beyond k levels only (over-rating free). Live Jev Score
+(`--jev-question score`, default for ordinal contracts) sends `choice_order` as
+the rubric and maps level probabilities back to choice ids. Offline JSONL with
+ordered choice ids works too. See `examples/contracts/ordinal-routing.json`.
 
 Earlier note (2026-09-26) claimed Noul "does not map onto a case's choice set".
 That was wrong: a binary case maps exactly, as above.

@@ -4,6 +4,12 @@
 
 ### Added
 
+- Jev Score: `--jev-question score` (default when the contract has
+  `choice_order`). The rubric is the contract's ordered levels; Jev's
+  per-level probabilities map back to choice ids, and a returned legend that
+  does not match the rubric is an error. An ordinal contract asked with Jev
+  Choice now warns that Jev cannot see the order.
+
 - Certified two-stage cascade: `certify_cascade` / `run_cascade_certification`
   (Learn-Then-Test on `(λ₁, λ₂)`), `CascadeProfile`, `decide_cascade`, CLI
   `decisionops certify-cascade` and cascade-aware `decide` (two `-p`).

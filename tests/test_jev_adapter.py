@@ -242,7 +242,7 @@ def test_noul_rejects_non_binary_cases_and_missing_yes_choice():
     with pytest.raises(ValueError, match="yes_choice"):
         JevProvider(client=FakeNoulClient(0.7), question_type="noul")
     with pytest.raises(ValueError, match="question_type"):
-        JevProvider(client=FakeNoulClient(0.7), question_type="score")
+        JevProvider(client=FakeNoulClient(0.7), question_type="rank")
 
 
 def test_noul_predictions_certify_through_asymmetric_contract():
@@ -276,6 +276,220 @@ def test_noul_predictions_certify_through_asymmetric_contract():
     # Only confident skips are auto-executed; escalations are never risk.
     assert 0.0 < level.test["coverage"] < 0.5
     assert report.metadata["contract"]["yes_choice"] == "deep_llm_review"
+
+
+# ------------------------------------------------------------------ score
+
+LEVELS = ["skip", "shallow", "deep", "human"]
+RATE = DecisionCase(
+    id="s1",
+    state="diff: rewrites the payment retry loop",
+    question="How much review does this change need?",
+    choices=LEVELS,
+    label="deep",
+)
+
+
+class FakeScoreClient(FakeClient):
+    """Canned Score answer; echoes the sent rubric as legend unless overridden."""
+
+    def __init__(self, probabilities, legend=None, model="jev-1.13.0"):
+        super().__init__({"x": 1.0}, model=model)
+        self.score_probs = probabilities
+        self.legend = legend
+
+    def system_one(self, *, state, questions, model=None):
+        self.calls.append({"state": state, "questions": questions, "model": model})
+        criteria = list(questions["decision"].criteria)
+        legend = self.legend if self.legend is not None else dict(enumerate(criteria))
+        expected = sum(int(k) * v for k, v in self.score_probs.items())
+        answer = SimpleNamespace(
+            type="score",
+            score=expected,
+            confidence=0.4,
+            legend=legend,
+            probabilities=dict(self.score_probs),
+        )
+        return SimpleNamespace(model=self.model, answers={"decision": answer}, usage=None)
+
+
+def _score(client, **kwargs):
+    return _provider(client, question_type="score", choice_order=LEVELS, **kwargs)
+
+
+def test_score_maps_levels_onto_choice_order():
+    pred = _score(FakeScoreClient({0: 0.05, 1: 0.15, 2: 0.7, 3: 0.1})).predict(RATE)
+    assert pred.probabilities == pytest.approx(
+        {"skip": 0.05, "shallow": 0.15, "deep": 0.7, "human": 0.1}
+    )
+    assert pred.prediction == "deep"
+    # Confidence comes from the distribution, never from Jev's own field.
+    assert pred.confidence == pytest.approx(0.7)
+    assert pred.metadata["question_type"] == "score"
+    assert pred.metadata["jev_confidence"] == 0.4
+    assert pred.metadata["jev_score"] == pytest.approx(1.85)
+    assert pred.metadata["choice_order"] == LEVELS
+
+
+def test_score_sends_ordered_rubric_from_choice_order():
+    client = FakeScoreClient({0: 1.0})
+    _score(client, descriptions={"deep": "touches logic or data"}).predict(RATE)
+    question = client.calls[0]["questions"]["decision"]
+    assert question.type == "score"
+    assert question.instructions == "How much review does this change need?"
+    # Order is the contract's, even when the case lists choices differently.
+    assert list(question.criteria) == ["skip", "shallow", "touches logic or data", "human"]
+
+
+def test_score_case_choice_order_does_not_matter():
+    shuffled = RATE.model_copy(update={"choices": ["human", "skip", "deep", "shallow"]})
+    pred = _score(FakeScoreClient({3: 0.9, 0: 0.1})).predict(shuffled)
+    assert pred.prediction == "human"
+    assert pred.probabilities["skip"] == pytest.approx(0.1)
+
+
+def test_score_missing_levels_get_zero_and_ties_go_up():
+    pred = _score(FakeScoreClient({1: 0.5, 2: 0.5})).predict(RATE)
+    assert pred.probabilities["skip"] == 0.0 and pred.probabilities["human"] == 0.0
+    # A tie never resolves to the lower (riskier) level.
+    assert pred.prediction == "deep"
+
+
+def test_score_rejects_mismatched_legend():
+    # Jev answered against a different rubric: refuse instead of re-mapping.
+    stale = {0: "skip", 1: "deep", 2: "shallow", 3: "human"}
+    with pytest.raises(ValueError, match="legend"):
+        _score(FakeScoreClient({0: 1.0}, legend=stale)).predict(RATE)
+    three = {0: "skip", 1: "shallow", 2: "deep"}
+    with pytest.raises(ValueError, match="legend"):
+        _score(FakeScoreClient({0: 1.0}, legend=three)).predict(RATE)
+
+
+def test_score_accepts_string_legend_keys():
+    legend = {str(i): c for i, c in enumerate(LEVELS)}
+    pred = _score(FakeScoreClient({2: 1.0}, legend=legend)).predict(RATE)
+    assert pred.prediction == "deep"
+
+
+def test_score_rejects_levels_outside_rubric_and_bad_cases():
+    with pytest.raises(ValueError, match="outside 0..3"):
+        _score(FakeScoreClient({0: 0.5, 4: 0.5}, legend={})).predict(RATE)
+    with pytest.raises(ValueError, match="all zero"):
+        _score(FakeScoreClient({0: 0.0}, legend={})).predict(RATE)
+    with pytest.raises(ValueError, match="score needs choices"):
+        _score(FakeScoreClient({0: 1.0})).predict(CASE)
+
+
+def test_score_requires_choice_order():
+    from decisionops.adapters.jev import JevProvider
+
+    with pytest.raises(ValueError, match="choice_order"):
+        JevProvider(client=FakeScoreClient({0: 1.0}), question_type="score")
+    with pytest.raises(ValueError, match="choice_order"):
+        JevProvider(
+            client=FakeScoreClient({0: 1.0}), question_type="score", choice_order=["a"]
+        )
+    with pytest.raises(ValueError, match="duplicates"):
+        JevProvider(
+            client=FakeScoreClient({0: 1.0}),
+            question_type="score",
+            choice_order=["a", "a"],
+        )
+
+
+def test_score_predictions_certify_through_ordinal_contract():
+    """End to end: Jev Score answers -> ordinal under-rate CRC certificate."""
+    import numpy as np
+
+    from decisionops.conformal.certify import run_certification
+    from decisionops.conformal.risk_control import ORDINAL_QUANTITY
+    from decisionops.contract import DecisionContract
+
+    contract = DecisionContract(
+        name="review-depth",
+        choices=LEVELS,
+        auto_choices=LEVELS,
+        choice_order=LEVELS,
+        under_rate_tolerance=1,
+    )
+    rng = np.random.default_rng(0)
+    cases, preds = [], []
+    for i in range(600):
+        true_i = int(rng.integers(0, 4))
+        conf = float(rng.uniform(0.4, 0.95))
+        pred_i = true_i if rng.random() < conf else int(rng.integers(0, 4))
+        probs = {j: (1.0 - conf) / 3 for j in range(4)}
+        probs[pred_i] = conf
+        case = RATE.model_copy(update={"id": str(i), "label": LEVELS[true_i]})
+        cases.append(case)
+        preds.append(_score(FakeScoreClient(probs)).predict(case))
+
+    report = run_certification(cases, preds, alphas=[0.10], calibrate=False, contract=contract)
+    level = report.levels[0]
+    assert level.certificate.feasible
+    assert level.certificate.controlled_quantity == ORDINAL_QUANTITY
+
+
+def _cli_jev(monkeypatch, tmp_path, contract, extra=()):
+    """Run `decisionops eval --provider jev` with a fake Jev client per call type."""
+    import json
+
+    from typer.testing import CliRunner
+
+    from decisionops.adapters import jev as jev_mod
+    from decisionops.cli.main import app
+
+    clients = []
+
+    class _FakeSDKClient:
+        """Answers Score or Choice depending on the question it is sent."""
+
+        def __init__(self, **kwargs):
+            self.score = FakeScoreClient({2: 0.8, 3: 0.2})
+            self.choice = FakeClient({"deep": 0.8, "human": 0.2})
+            self.calls = []
+            clients.append(self)
+
+        def system_one(self, *, state, questions, model=None):
+            self.calls.append({"state": state, "questions": questions, "model": model})
+            inner = self.score if questions["decision"].type == "score" else self.choice
+            return inner.system_one(state=state, questions=questions, model=model)
+
+    monkeypatch.setattr(jev_mod._require_sdk(), "TypeSafeClient", _FakeSDKClient)
+    data = tmp_path / "d.jsonl"
+    data.write_text(json.dumps(RATE.model_dump()) + "\n")
+    cpath = tmp_path / "c.json"
+    cpath.write_text(contract.model_dump_json())
+    result = CliRunner().invoke(
+        app,
+        ["eval", str(data), "--provider", "jev", "--contract", str(cpath), *extra],
+        env={"TYPESAFE_API_KEY": "k"},
+    )
+    return result, clients
+
+
+def test_cli_ordinal_contract_defaults_jev_to_score(monkeypatch, tmp_path):
+    from decisionops.contract import DecisionContract
+
+    contract = DecisionContract(
+        name="review-depth", choices=LEVELS, auto_choices=LEVELS, choice_order=LEVELS
+    )
+    result, clients = _cli_jev(monkeypatch, tmp_path, contract)
+    assert result.exit_code == 0, result.output
+    assert clients[0].calls[0]["questions"]["decision"].type == "score"
+
+    result, _ = _cli_jev(monkeypatch, tmp_path, contract, ("--jev-question", "choice"))
+    assert result.exit_code == 0, result.output
+    assert "not see that the levels are ordered" in " ".join(result.output.split())
+
+
+def test_cli_score_without_ordinal_contract_is_rejected(monkeypatch, tmp_path):
+    from decisionops.contract import DecisionContract
+
+    contract = DecisionContract(name="flat", choices=LEVELS, auto_choices=["skip"])
+    result, _ = _cli_jev(monkeypatch, tmp_path, contract, ("--jev-question", "score"))
+    assert result.exit_code != 0
+    assert "choice_order" in result.output
 
 
 @pytest.mark.skipif(

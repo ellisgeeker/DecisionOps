@@ -121,8 +121,10 @@ JevQuestionOption = Annotated[
     str | None,
     typer.Option(
         "--jev-question",
-        help="Jev only: choice (default) or noul. noul asks a calibrated yes/no "
-        "question and needs a contract with yes_choice.",
+        help="Jev only: choice, noul or score. Default: score for an ordinal "
+        "contract (choice_order), else choice. noul asks a calibrated yes/no "
+        "question and needs a contract with yes_choice; score rates against the "
+        "contract's ordered levels.",
     ),
 ]
 
@@ -249,7 +251,9 @@ def _load_cases_and_predictions(
     if name == "jev":
         from decisionops.adapters.jev import DEFAULT_MODEL, QUESTION_TYPES, JevProvider
 
-        question_type = (jev_question or "choice").strip().lower()
+        ordinal = contract is not None and contract.is_ordinal
+        default_question = "score" if ordinal else "choice"
+        question_type = (jev_question or default_question).strip().lower()
         if question_type not in QUESTION_TYPES:
             raise typer.BadParameter(
                 f"--jev-question must be one of {', '.join(QUESTION_TYPES)}"
@@ -260,6 +264,18 @@ def _load_cases_and_predictions(
                 "--jev-question noul needs --contract with yes_choice "
                 "(the choice that means 'yes')"
             )
+        choice_order = contract.choice_order if ordinal else None
+        if question_type == "score" and not choice_order:
+            raise typer.BadParameter(
+                "--jev-question score needs --contract with choice_order "
+                "(ordered levels, low to high)"
+            )
+        if ordinal and question_type != "score":
+            console.print(
+                f"[yellow]Warning:[/yellow] ordinal contract asked with Jev "
+                f"{question_type}: Jev will not see that the levels are ordered. "
+                "Omit --jev-question to use score."
+            )
         provider = JevProvider(
             model=jev_model or DEFAULT_MODEL,
             base_url=jev_base_url,
@@ -267,9 +283,11 @@ def _load_cases_and_predictions(
             contract_instructions=contract_instructions,
             question_type=question_type,
             yes_choice=yes_choice,
+            choice_order=choice_order,
         )
         console.print(
-            f"[dim]Running Jev ({provider.model}) on {len(cases)} cases…[/dim]"
+            f"[dim]Running Jev ({provider.model}, {question_type}) on "
+            f"{len(cases)} cases…[/dim]"
         )
         try:
             return cases, provider.predict_many(cases)

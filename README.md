@@ -289,12 +289,29 @@ Notes:
 - One API call per case — start with `--limit` to check cost and latency.
 - Jev's own `confidence` field is recorded in metadata but not used; DecisionOps derives
   confidence from the distribution, like every provider.
-- **Choice** (default) and **Noul** are supported. **Ordered levels (Score-style)**
-  use a contract with `choice_order` (low→high) and optional
-  `under_rate_tolerance` (default 1): the certificate bounds automatic
-  **under-rating** beyond k levels; over-rating is not certificate risk.
-  Offline JSONL is enough; live Jev Score export is not wired yet. Example:
-  `examples/contracts/ordinal-routing.json`.
+- **Choice**, **Noul** and **Score** are supported (`--jev-question`). With an
+  ordinal contract (`choice_order`) the default is Score; otherwise Choice.
+
+### Score: ordered levels
+
+An ordinal contract lists its levels low→high in `choice_order`, with
+`under_rate_tolerance` (default 1): the certificate bounds automatic
+**under-rating** beyond k levels; over-rating is not certificate risk. Example:
+`examples/contracts/ordinal-routing.json`.
+
+```bash
+uv run decisionops certify data.jsonl --provider jev --contract ordinal-routing.json
+```
+
+The rubric sent to Jev is built from the contract, one entry per level in
+`choice_order` (its `descriptions`, else the choice id), so the levels belong to
+the contract, not to Jev. Jev's per-level probabilities map back onto choice
+ids; the prediction is the most likely level, ties going to the higher level.
+If the `legend` Jev returns does not match the rubric sent, the call fails
+instead of re-mapping. Changing the levels changes the contract fingerprint, and
+a new Jev model id fails the profile's model check, so both mean recertify.
+Asking an ordinal contract with `--jev-question choice` still works but warns:
+Jev then treats the levels as unordered.
 
 
 ### Noul: calibrated yes/no routing
