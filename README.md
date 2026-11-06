@@ -78,6 +78,7 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Cascade recertify + drift (findings §12, §13) | done (0.1.2) |
 | Ordinal (Score) risk + live Jev Score | done (0.1.2) |
 | Code review showcase pack (`examples/code-review/`) | done (0.1.2) |
+| Real PR evidence: cpython reverts, live Jev (findings §14) | done |
 | Thin gate: GitHub Action (`examples/github-action/`) | done (0.1.2) |
 | Thin gate: `POST /v1/decision` | later |
 

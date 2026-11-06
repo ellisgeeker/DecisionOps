@@ -1,0 +1,12 @@
+{
+  "name": "cpython-incident",
+  "description": "Binary post-merge outcome for python/cpython PRs: will this change be reverted or need a regression fix within 90 days? Auto-merging without an extra review is the cheap path; only incidents on that path count as risk.",
+  "choices": ["ok", "incident"],
+  "auto_choices": ["ok"],
+  "yes_choice": "incident",
+  "instructions": "Will this pull request to CPython have to be reverted, or cause a regression that needs a follow-up fix, within 90 days of merging?",
+  "descriptions": {
+    "incident": "Likely to break something after merge: it gets reverted, or a later change has to fix a regression it introduced.",
+    "ok": "Unlikely to cause trouble after merge: it stays in, and nothing has to fix a regression from it."
+  }
+}

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- findings §14: real python/cpython PRs (13,827 merged, 2023–2025), labelled
+  by revert or regression fix within 90 days. Live Jev Noul AUC 0.715 vs
+  0.60–0.63 for size baselines; CRC on population-rate resamples holds α.
+  Fetch / label / score / analyse scripts under `scripts/`; contract
+  `examples/contracts/cpython-incident.json`.
+
 ## 0.1.2 — 2026-11-06
 
 Certified two-stage cascade with its label loop, ordinal (Score) risk, live Jev

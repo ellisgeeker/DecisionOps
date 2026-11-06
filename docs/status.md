@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-06 (0.1.2 released; next is a real-repo Action run and real PR history)
+**Last updated:** 2026-11-06 (real cpython PR evidence, findings §14; next is stability report, then weighted CRC + IPW)
 **Version:** 0.1.2 (tagged and pushed 2026-11-06; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,11 +16,27 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: run the Action on a real GitHub repository** (labels API only stubbed
-so far; needs a test repo with the `TYPESAFE_API_KEY` secret), then **real PR
-history as evidence** (reverts / incident-linked PRs as labels; repository to
-be chosen). `POST /v1/decision` waits for a caller that is not GitHub. PyPI
-still undecided.
+**Next, in order (decided 2026-11-06):**
+
+1. **Certificate stability report** in `certify`: the spread of certified
+   coverage over re-splits, and a warning when few positives sit in the
+   calibration set. cpython showed single certificates ranging 25–99.8%.
+2. **Weighted CRC, with IPW**: per-row weights in the CRC loss, so an enriched
+   sample (all incidents kept) certifies at the population rate, and audit
+   samples can use escalated rows at weight 1 / ε. The `B/(n+1)` term grows
+   with the weight bound; measure the label cost before recommending it.
+
+Deferred: the Action on a real GitHub repository (decided 2026-11-06 not to
+run it now; README says so), `POST /v1/decision`, PyPI.
+
+Done 2026-11-06 — **real PR evidence, findings §14** (python/cpython, 13,827
+merged PRs 2023-01 → 2025-12, label = reverted or regression-fixed within 90
+days, 0.69%). Live Jev Noul on 96 incidents + 3,000 ok: AUC 0.715 (size
+baselines 0.60–0.63). CRC on population-rate resamples: α=0.5% certified 30/30,
+mean auto-merge 75% [43%, 99.8%], mean joint incident 0.39%. Scripts
+`scripts/*cpython*.py`, `scripts/score_jev_resumable.py`; raw data in `data/`
+(gitignored). Rejected label schemes (file rules, review received) are written
+up in §14.
 
 Done 2026-11-06 — **0.1.2 released**: tag `v0.1.2`. Cascade certify +
 recertify + drift, selective risk, ordinal risk, live Jev Score, code-review

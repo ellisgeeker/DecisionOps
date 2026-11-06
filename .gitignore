@@ -53,3 +53,6 @@ examples/banking77/shadow-demo/
 
 # Private product plan (kept local, never committed)
 decisionops-plan.md
+
+# Raw fetched data (rebuild with scripts/fetch_*.py)
+/data/

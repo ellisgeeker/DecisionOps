@@ -665,6 +665,88 @@ smaller grid lowers it at the price of a coarser operating point.
 
 ---
 
+## 14. Real cpython PRs: Jev ranks post-merge incidents, and CRC holds α
+
+**Measured 2026-11-06.** First real code-review traffic. The question is the
+one public history can answer without hand-written rules: *will this merged PR
+be reverted, or need a regression fix, within 90 days?*
+
+**Labels: outcomes only.** All 14,990 PRs merged into `python/cpython` main
+2023-01 → 2026-03 (`scripts/fetch_cpython_prs.py`). A PR is an `incident` when
+a later PR within 90 days reverts it (PR refs, plus "This reverts commit
+<sha>" resolved through the commit's PR, `scripts/resolve_cpython_reverts.py`)
+or titles itself a regression fix pointing at it
+(`scripts/label_cpython_incidents.py`). Reverts themselves and PRs whose
+window had not closed are dropped: 13,827 labelled, 102 incidents (0.74%;
+99 reverts, 3 regression fixes). Six planned reverts ("temporarily disable
+...") are not incidents, leaving 96 (0.69%).
+
+Two earlier label schemes were rejected before any model ran: file-type rules
+for a four-level depth (98% of labels were our rule, not an outcome), and the
+review a PR received (it tracks who wrote the PR: 55% of PRs are self-merged by
+core developers, and a two-line docs typo fix from an outside contributor gets
+more reviewers than a 509-line crash fix by a core developer).
+
+**Setup.** All 96 incidents plus 3,000 time-random ok PRs
+(`scripts/build_cpython_incident_pack.py`), in the code-review `state` layout.
+Live Jev Noul (`jev-1.14.0`, 3,096 calls, 0 failures,
+`scripts/score_jev_resumable.py`), contract
+`examples/contracts/cpython-incident.json` (auto-merge is the cheap path).
+Ok rows carry weight 13,725 / 3,000 so population rates use the real 0.69%.
+`scripts/analyze_cpython_incidents.py` reproduces every number below.
+
+**Ranking.**
+
+| Score | AUC | 95% bootstrap |
+|---|--:|---|
+| **Jev P(incident)** | **0.715** | 0.670–0.761 |
+| log lines changed | 0.600 | 0.540–0.660 |
+| log files changed | 0.634 | 0.581–0.689 |
+
+Within size terciles Jev's AUC is 0.71 / 0.74 / 0.68, so it is not reading PR
+size alone (correlation with log lines 0.51). By change type: code 0.65 (73
+incidents), build/CI/tests 0.78 (15), docs 0.79 (8); the last two are small.
+
+**Population trade-off** (weighted, empirical threshold sweep):
+
+| auto-merged | joint incident rate | incidents escalated |
+|--:|--:|--:|
+| 100% | 0.69% | 0% |
+| 89% | 0.49% | 30% |
+| 72% | 0.30% | 56% |
+| 50% | 0.12% | 83% |
+| 26% | 0.04% | 95% |
+
+**Certificates.** The enriched pack is not exchangeable with live traffic, so
+CRC runs on 30 population-rate resamples (all 3,000 ok + 21 random incidents,
+0.70%):
+
+| α | certified | test auto-merge, mean [min, max] | test joint incident, mean |
+|---|--:|---|--:|
+| 0.5% | 30/30 | 75% [43%, 99.8%] | 0.39% |
+| 0.3% | 30/30 | 59% [25%, 99.8%] | 0.21% |
+
+What it shows:
+
+1. **The certificate holds on real code-review traffic.** Mean joint incident
+   rate stays under α at both levels.
+2. **Jev carries real signal, beyond size.** Its ranking puts 30% of incidents
+   in the most suspicious 11% of PRs and 83% in the top half.
+3. **A single certificate is unstable when positives are rare.** About six
+   incidents land in each calibration split, so automation ranges 25–99.8% from
+   one split to the next. Reporting that spread, and weighted CRC that keeps
+   every labelled incident instead of resampling, are the two follow-ups.
+
+Limits: these PRs were already reviewed by core developers, so this is
+residual post-review risk, not "how much review does this PR need"; that label
+has to come from a customer's shadow mode. The base rate is low, so a
+threshold binds only for α below ~0.7%. Jev may have seen these public PRs and
+their reverts in training; that cannot be ruled out here. 24 of 130 reverts did
+not resolve to a PR, so some incidents are labelled ok. Raw data stays under
+`data/` (gitignored).
+
+---
+
 ## Limits on all of the above
 
 **Laya scope.** One checkpoint, zero-shot, one task shape, 77/151 options. Its
