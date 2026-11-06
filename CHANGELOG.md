@@ -4,6 +4,16 @@
 
 ### Added
 
+- Certificate stability. Every CRC / high-probability result now carries
+  `error_budget` (errors the bound tolerates on n_cal: α(n+1) − B for CRC, the
+  largest Clopper-Pearson-passing k for HP) and `n_errors_calibration`;
+  `certify` notes when fewer than 5 errors carry a certificate.
+  `run_certification(stability_splits=N)` / `certify --stability-splits N`
+  reruns on N more seeds and reports p10 / median / p90 of threshold, test
+  coverage and test error, plus the mean error, and notes a p10–p90 coverage
+  spread above 20 points. On a population-rate cpython draw at α=0.5% the
+  budget is 2.6 errors and coverage spans 62–100% (p10–p90).
+
 - findings §14: real python/cpython PRs (13,827 merged, 2023–2025), labelled
   by revert or regression fix within 90 days. Live Jev Noul AUC 0.715 vs
   0.60–0.63 for size baselines; CRC on population-rate resamples holds α.

@@ -26,12 +26,43 @@ RiskKind = Literal["joint", "selective"]
 SELECTIVE_DEFAULT_LEVEL = 0.9
 
 
+class LevelStability(BaseModel):
+    """
+    Spread of one alpha level over re-splits of the same pool.
+
+    Each split reruns the whole procedure (temperature, CRC, test) on a fresh
+    seed. It measures split-to-split variation inside *this* pool, not a
+    population expectation, but it shows how much a single certificate can move.
+    """
+
+    n_splits: int
+    n_feasible: int
+    threshold: dict[str, float] | None = None
+    """min / p10 / median / p90 / max of the certified threshold."""
+
+    test_coverage: dict[str, float] | None = None
+    test_joint_error: dict[str, float] | None = None
+    mean_test_joint_error: float | None = None
+    """Mean over feasible splits: what an in-expectation certificate promises <= alpha."""
+
+
+def _spread(values: list[float]) -> dict[str, float] | None:
+    if not values:
+        return None
+    import numpy as np
+
+    q = np.quantile(values, [0.0, 0.1, 0.5, 0.9, 1.0])
+    return {k: float(v) for k, v in zip(("min", "p10", "median", "p90", "max"), q, strict=True)}
+
+
 class CertifiedLevel(BaseModel):
     """One target risk level: certificate from cal, measurement on test."""
 
     certificate: CRCResult
     test: dict[str, float | int] | None = None
     bound_held_on_test: bool | None = None
+    stability: LevelStability | None = None
+    """Re-split spread; set when `run_certification(stability_splits=N)`."""
     """
     Whether this one test split came out <= alpha.
 
@@ -69,6 +100,7 @@ def run_certification(
     contract: DecisionContract | None = None,
     confidence_level: float | None = None,
     risk: RiskKind = "joint",
+    stability_splits: int = 0,
 ) -> CertificationReport:
     """
     Three-way split: fit temperature, derive CRC thresholds, verify — on disjoint data.
@@ -77,6 +109,11 @@ def run_certification(
     auto-accepted and wrong. `risk="selective"` bounds the error rate *among*
     auto-accepted cases (Learn-Then-Test); it is high-probability only, so
     `confidence_level` defaults to 0.9, and it needs 0-1 loss.
+
+    `stability_splits=N` reruns the whole procedure on N further seeds and
+    attaches the spread of threshold, test coverage and test joint error to
+    each level. Use it when the calibration set holds few errors: a valid
+    certificate can still move a lot from one split to the next.
 
     `confidence_level` (e.g. 0.95) switches every level from an in-expectation
     CRC certificate to a high-probability one; see `certify_threshold`.
@@ -94,6 +131,8 @@ def run_certification(
     """
     if alphas is None:
         alphas = [0.01, 0.05, 0.10]
+    if stability_splits < 0:
+        raise ValueError(f"stability_splits must be >= 0, got {stability_splits}")
     if not 0.0 <= temp_ratio < 1.0:
         raise ValueError(f"temp_ratio must be in [0, 1), got {temp_ratio}")
     if risk not in ("joint", "selective"):
@@ -254,6 +293,22 @@ def run_certification(
             "the calibration draw, true joint error <= alpha. A test split can still "
             "land above alpha by sampling noise."
         )
+    from decisionops.conformal.risk_control import FEW_ERRORS
+
+    thin = [
+        level.certificate
+        for level in levels
+        if level.certificate.feasible
+        and level.certificate.error_budget is not None
+        and level.certificate.error_budget < FEW_ERRORS
+    ]
+    if thin:
+        notes.append(
+            "Few errors carry the certificate: the bound tolerates only "
+            + ", ".join(f"{c.error_budget:.1f} at alpha={c.alpha:g}" for c in thin)
+            + f" on n_cal={thin[0].n_calibration}. Valid, but one case can move the "
+            "threshold; run with --stability-splits to see how far."
+        )
     infeasible = [
         f"{level.certificate.alpha:.0%}" for level in levels if not level.certificate.feasible
     ]
@@ -262,6 +317,50 @@ def run_certification(
             f"No certified threshold exists at: {', '.join(infeasible)} "
             f"(n_crc_cal={len(cal_pairs)})."
         )
+
+    if stability_splits:
+        reruns = [
+            run_certification(
+                cases,
+                predictions,
+                alphas=alphas,
+                cal_ratio=cal_ratio,
+                temp_ratio=temp_ratio,
+                seed=seed + 1000 + i,
+                calibrate=calibrate,
+                loss_bound=loss_bound,
+                contract=contract,
+                confidence_level=confidence_level,
+                risk=risk,
+            )
+            for i in range(stability_splits)
+        ]
+        measured = "selective_risk" if risk == "selective" else "joint_error_rate"
+        for j, level in enumerate(levels):
+            runs = [r.levels[j] for r in reruns]
+            ok = [r for r in runs if r.certificate.feasible and r.test is not None]
+            errs = [float(r.test[measured]) for r in ok if r.test[measured] == r.test[measured]]
+            level.stability = LevelStability(
+                n_splits=stability_splits,
+                n_feasible=len(ok),
+                threshold=_spread([float(r.certificate.threshold) for r in ok]),
+                test_coverage=_spread([float(r.test["coverage"]) for r in ok]),
+                test_joint_error=_spread(errs),
+                mean_test_joint_error=(sum(errs) / len(errs)) if errs else None,
+            )
+            cov = level.stability.test_coverage
+            if cov and cov["p90"] - cov["p10"] > 0.2:
+                notes.append(
+                    f"alpha={level.certificate.alpha:g}: certified test coverage moves "
+                    f"from {cov['p10']:.0%} to {cov['p90']:.0%} (p10-p90) over "
+                    f"{stability_splits} re-splits. One certificate is a noisy draw here; "
+                    "label more data, or set the operating point from the spread."
+                )
+            if len(ok) < stability_splits:
+                notes.append(
+                    f"alpha={level.certificate.alpha:g}: certified on {len(ok)} of "
+                    f"{stability_splits} re-splits."
+                )
 
     return CertificationReport(
         split=SplitInfo(
@@ -285,6 +384,7 @@ def run_certification(
             "loss_bound": loss_bound,
             "risk": risk,
             "temp_ratio": temp_ratio,
+            "stability_splits": stability_splits,
             "protocol": "three_way_split_temp_crc_test",
             "contract": contract.summary() if contract is not None else None,
             "contract_hash": contract.fingerprint() if contract is not None else None,

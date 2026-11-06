@@ -110,6 +110,17 @@ class CRCResult(BaseModel):
     """Mean loss among accepted calibration samples. Empirical, not certified."""
 
     n_accepted_calibration: int = 0
+    error_budget: float | None = None
+    """
+    Most calibration loss mass the bound tolerates at alpha, at any threshold:
+    alpha*(n+1) - B for CRC, the largest k with a Clopper-Pearson upper limit
+    <= alpha for a high-probability certificate. When it is a handful of errors,
+    one case can move the threshold: the certificate is valid but noisy.
+    """
+
+    n_errors_calibration: float | None = None
+    """Loss mass on the automatic path at the loosest threshold (all eligible cases)."""
+
     notes: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -191,6 +202,26 @@ def _controlled_quantity(
     return WEIGHTED_QUANTITY
 
 
+FEW_ERRORS = 5
+"""Warn below this error budget. A policy number, not theory."""
+
+
+def hp_error_budget(n: int, alpha: float, confidence_level: float) -> int:
+    """Largest error count k whose Clopper-Pearson upper limit on n is <= alpha; -1 if none."""
+    k = -1
+    while k + 1 <= n and clopper_pearson_upper(k + 1, n, confidence_level) <= alpha:
+        k += 1
+    return k
+
+
+def _few_errors_note(budget: float, n: int) -> str:
+    return (
+        f"Error budget: the bound tolerates only {max(budget, 0.0):.1f} errors on "
+        f"n_cal={n}, so a single case can move the threshold. The certificate is "
+        "valid but noisy; label more cases (especially misses) before relying on one."
+    )
+
+
 def _confidence_and_wrong(
     pairs: list[tuple[DecisionCase, DecisionPrediction]],
     auto_choices: frozenset[str] | None = None,
@@ -257,6 +288,7 @@ def _certify_high_probability(
     """RCPS with a Clopper-Pearson bound; fixed-sequence scan from strict to loose."""
     n = int(conf.size)
     min_n = min_calibration_samples_hp(alpha, confidence_level)
+    budget = hp_error_budget(n, alpha, confidence_level)
     base = {
         "alpha": alpha,
         "guarantee": "high_probability",
@@ -265,6 +297,8 @@ def _certify_high_probability(
         "n_calibration": n,
         "min_n_required": min_n,
         "loss_bound": 1.0,
+        "error_budget": float(budget),
+        "n_errors_calibration": float(np.sum(wrong[np.isfinite(conf)])),
     }
     notes: list[str] = []
 
@@ -308,6 +342,8 @@ def _certify_high_probability(
         notes.append(
             f"Certified threshold covers only {coverage:.1%} of calibration traffic."
         )
+    if budget < FEW_ERRORS:
+        notes.append(_few_errors_note(budget, n))
     notes.append(
         f"High-probability certificate: with probability >= {confidence_level:.0%} over "
         "the calibration draw, the true joint automated error rate is <= alpha."
@@ -392,6 +428,10 @@ def certify_threshold(
 
     n = len(pairs)
     min_n = min_calibration_samples(alpha, loss_bound)
+    budget = {
+        "error_budget": alpha * (n + 1) - loss_bound,
+        "n_errors_calibration": float(np.sum(wrong[np.isfinite(conf)])),
+    }
     notes: list[str] = []
 
     # The B/(n+1) penalty alone can exceed alpha; then no threshold works.
@@ -410,6 +450,7 @@ def certify_threshold(
             min_n_required=min_n,
             loss_bound=loss_bound,
             notes=notes,
+            **budget,
         )
 
     # Rhat is a step function of lambda; steps occur at observed confidences.
@@ -426,6 +467,7 @@ def certify_threshold(
             min_n_required=min_n,
             loss_bound=loss_bound,
             notes=notes,
+            **budget,
         )
     chosen: float | None = None
     chosen_rhat = 0.0
@@ -456,6 +498,7 @@ def certify_threshold(
             min_n_required=min_n,
             loss_bound=loss_bound,
             notes=notes,
+            **budget,
         )
 
     accepted = conf >= chosen
@@ -469,6 +512,8 @@ def certify_threshold(
         notes.append(
             f"Certified threshold covers only {coverage:.1%} of calibration traffic."
         )
+    if budget["error_budget"] < FEW_ERRORS:
+        notes.append(_few_errors_note(budget["error_budget"], n))
     if quantity == ORDINAL_QUANTITY:
         notes.append(
             "Certified quantity is the ordinal under-rate joint automated error "
@@ -505,6 +550,7 @@ def certify_threshold(
             "n_grid_candidates": int(grid.size),
             "auto_choices": sorted(auto_choices) if auto_choices is not None else None,
         },
+        **budget,
     )
 
 

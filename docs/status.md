@@ -18,9 +18,10 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 **Next, in order (decided 2026-11-06):**
 
-1. **Certificate stability report** in `certify`: the spread of certified
-   coverage over re-splits, and a warning when few positives sit in the
-   calibration set. cpython showed single certificates ranging 25–99.8%.
+1. ~~**Certificate stability report**~~ — done 2026-11-06: `error_budget` on
+   every certificate, a note under 5 errors, `certify --stability-splits N`
+   (p10 / median / p90 of threshold, coverage, error). cpython draw at α=0.5%:
+   budget 2.6, coverage p10–p90 62–100%.
 2. **Weighted CRC, with IPW**: per-row weights in the CRC loss, so an enriched
    sample (all incidents kept) certifies at the population rate, and audit
    samples can use escalated rows at weight 1 / ε. The `B/(n+1)` term grows

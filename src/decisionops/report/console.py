@@ -316,6 +316,52 @@ def print_certification_report(
                 r"the time — the guarantee is on E\[loss]. Judge by averaging over seeds.[/dim]"
             )
 
+    budget_rows = [lv for lv in report.levels if lv.certificate.error_budget is not None]
+    if budget_rows:
+        console.print(
+            "[dim]Error budget (errors the bound tolerates on n_cal): "
+            + "  ".join(
+                f"{lv.certificate.alpha:.2%} → {max(lv.certificate.error_budget, 0):.1f}"
+                for lv in budget_rows
+            )
+            + "[/dim]"
+        )
+
+    stable = [lv for lv in report.levels if lv.stability is not None]
+    if stable:
+        st = Table(
+            title=f"Stability over {stable[0].stability.n_splits} re-splits (p10 / median / p90)",
+            show_header=True,
+            header_style="bold",
+        )
+        st.add_column("Target alpha")
+        st.add_column("Certified", justify="right")
+        st.add_column("Threshold", justify="right")
+        st.add_column("Coverage (test)", justify="right")
+        st.add_column(f"{quantity.capitalize()} (test)", justify="right")
+        st.add_column("Mean error", justify="right")
+
+        def _q(d: dict | None, fmt: str) -> str:
+            if not d:
+                return "—"
+            return " / ".join(format(d[k], fmt) for k in ("p10", "median", "p90"))
+
+        for level in stable:
+            s_ = level.stability
+            st.add_row(
+                f"{level.certificate.alpha:.2%}",
+                f"{s_.n_feasible}/{s_.n_splits}",
+                _q(s_.threshold, ".3f"),
+                _q(s_.test_coverage, ".1%"),
+                _q(s_.test_joint_error, ".4f"),
+                "—" if s_.mean_test_joint_error is None else f"{s_.mean_test_joint_error:.4f}",
+            )
+        console.print(st)
+        console.print(
+            "[dim]Re-splits reshuffle this pool; they show how far one certificate "
+            "can move, not a population expectation.[/dim]"
+        )
+
     infeasible = [lv for lv in report.levels if not lv.certificate.feasible]
     if infeasible:
         console.print()

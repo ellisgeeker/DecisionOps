@@ -773,6 +773,15 @@ def certify_cmd(
             "high-probability only, --confidence-level defaults to 0.9).",
         ),
     ] = "joint",
+    stability_splits: Annotated[
+        int,
+        typer.Option(
+            "--stability-splits",
+            help="Rerun on N more seeds and report the spread of threshold, test "
+            "coverage and test error (e.g. 30). Use when few errors are in the "
+            "calibration set. 0 = off.",
+        ),
+    ] = 0,
 ) -> None:
     """
     Certified abstention thresholds via Conformal Risk Control.
@@ -801,6 +810,8 @@ def certify_cmd(
         raise typer.BadParameter("--audit-rate must be in [0, 1)")
     if risk not in ("joint", "selective"):
         raise typer.BadParameter("--risk must be 'joint' or 'selective'")
+    if stability_splits < 0:
+        raise typer.BadParameter("--stability-splits must be >= 0")
     if profile is None and (audit_rate != 0.0 or audit_seed != 0):
         raise typer.BadParameter("--audit-rate / --audit-seed need --profile")
 
@@ -841,6 +852,7 @@ def certify_cmd(
             contract=decision_contract,
             confidence_level=confidence_level,
             risk=risk,
+            stability_splits=stability_splits,
         )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
