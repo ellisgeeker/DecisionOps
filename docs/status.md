@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-06 (live Jev Score; code-review showcase pack #7; next is thin gate #10)
+**Last updated:** 2026-11-06 (live Jev Score; showcase #7; thin gate #10 Action; next 0.1.2)
 **Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
@@ -16,10 +16,25 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: thin gate (#10).** A sample GitHub Action that scores a PR with Jev
-Score, runs `decide` on the committed profile, and labels the PR with the route.
-The escalate branch is left to the calling app (#9 is not library work: see
-below). Then 0.1.2. PyPI still undecided.
+**Next: tag 0.1.2**, so the Action can pin a release instead of a commit
+(Jev Score is not in v0.1.1). Then real PR history as evidence (reverts /
+incident-linked PRs as labels; repository to be chosen). `POST /v1/decision`
+waits for a caller that is not GitHub. PyPI still undecided.
+
+Done 2026-11-06 — thin gate #10, GitHub Action part (`examples/github-action/`):
+
+- `pr_route.py`: PR event → `DecisionCase` in the pack's exact `state` layout →
+  Jev Score pinned to the profile's model → `decide` → `review:<level>` /
+  `review:escalate` label, step outputs, job summary, one decision record.
+  Stale `review:*` labels are replaced. Contract fingerprint and model are
+  checked before routing.
+- `decisionops-pr-route.yml`: base-commit checkout (no PR code with secrets),
+  forks skipped, decision uploaded for the audit loop, placeholder escalate job.
+  Install is pinned to commit d4e945b until 0.1.2 exists.
+- Tests: `tests/test_pr_route_example.py` (7, fake Jev). Live dry run against
+  `jev-1.14.0` on the sample event: auth "typo fix" → auto `human`.
+- Not exercised on a real GitHub repository yet (labels API calls are tested
+  with a stub only).
 
 Done 2026-11-06 — code-review showcase pack (#7), `examples/code-review/`:
 

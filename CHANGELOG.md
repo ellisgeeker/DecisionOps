@@ -4,6 +4,11 @@
 
 ### Added
 
+- Thin gate example `examples/github-action/`: a GitHub Action and
+  `pr_route.py` that score a PR with Jev Score, apply a certified profile, and
+  label the PR `review:<level>` or `review:escalate`. Escalation targets stay in
+  the calling workflow.
+
 - Code-review showcase pack `examples/code-review/`: 600 synthetic PRs (plain,
   misleading, and post-merge surprises), labelling guide whose rules are the
   contract rubric, live Jev Score predictions, and certify/decide reports for an

@@ -1,0 +1,74 @@
+# Copy to .github/workflows/decisionops-pr-route.yml in the repository you route.
+#
+# Scores each PR with Jev Score, applies the certified profile, and labels the
+# PR review:<level> or review:escalate. What each label triggers (an LLM
+# reviewer, a required human review, auto-merge) is up to your other workflows.
+#
+# Secrets: TYPESAFE_API_KEY. Commit into your repository, under .decisionops/:
+#   pr_route.py     (copy of examples/github-action/pr_route.py)
+#   profile.json    (the profile you certified on your own labelled PRs)
+#   contract.json   (the contract that profile was certified with)
+
+name: DecisionOps PR route
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write   # set the route label
+  issues: write          # labels live on the issue API
+
+concurrency:
+  group: decisionops-route-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  route:
+    # Forks get no secrets; skip rather than fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.route.outputs.action }}
+      level: ${{ steps.route.outputs.level }}
+      audit: ${{ steps.route.outputs.audit }}
+    steps:
+      # Base branch only: never execute code from the PR head with secrets.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pin a tag or commit you certified with, never a moving branch.
+      # Jev Score needs a commit after v0.1.1 until 0.1.2 is tagged.
+      - name: Install DecisionOps with Jev
+        run: pip install "decisionops[jev] @ git+https://github.com/ellisgeeker/DecisionOps@d4e945b96b6591c5eb8b3862966b8655b6ab2b4a"
+
+      - name: Route PR
+        id: route
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python .decisionops/pr_route.py \
+            --profile .decisionops/profile.json \
+            --contract .decisionops/contract.json \
+            --decisions-out decision.jsonl
+
+      # Keep every decision for the audit loop (decide -> label -> recertify).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: decisionops-decision-${{ github.event.pull_request.number }}
+          path: decision.jsonl
+
+  # Example of the calling side. Replace with your own escalation path.
+  escalate:
+    needs: route
+    if: needs.route.outputs.action == 'escalate'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Escalated. Call your LLM reviewer or request a human review here."

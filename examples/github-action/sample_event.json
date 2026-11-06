@@ -1,0 +1,14 @@
+{
+  "repository": {"full_name": "example-org/example-repo"},
+  "pull_request": {
+    "number": 101,
+    "title": "Fix typo in auth check",
+    "body": "`is_admin` was misspelled in one branch; corrected.",
+    "additions": 1,
+    "deletions": 1,
+    "user": {"login": "dev-a"},
+    "head": {"sha": "0000000000000000000000000000000000000000"},
+    "labels": []
+  },
+  "files": ["api/auth/permissions.py"]
+}
