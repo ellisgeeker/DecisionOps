@@ -11,6 +11,11 @@ own workflows: an LLM reviewer on `review:deep`, a required human review on
 `review:human` or `review:escalate`, nothing on `review:skip`. No LLM is called
 from here.
 
+**Status: not yet run on a real GitHub repository.** `pr_route.py` is covered
+by tests with a fake Jev and was dry-run against live Jev (`--no-label`), but
+the labels API calls, the workflow permissions and a real `pull_request`
+payload have only been exercised with stubs. Expect small fixes on a first run.
+
 ## Files
 
 - `pr_route.py` — PR event → `DecisionCase` → Jev Score → `decide` → label,
