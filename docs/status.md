@@ -1,7 +1,7 @@
 # Project status
 
-**Last updated:** 2026-11-06 (live Jev Score; showcase #7; thin gate #10 Action; next 0.1.2)
-**Version:** 0.1.1 (tagged and pushed 2026-10-24; cascade path unreleased; not on PyPI)
+**Last updated:** 2026-11-06 (0.1.2 released; next is a real-repo Action run and real PR history)
+**Version:** 0.1.2 (tagged and pushed 2026-11-06; not on PyPI)
 
 Where the project actually is, what to pick up next, and what is known to be
 incomplete. Written so it is usable after a gap of days or weeks.
@@ -16,10 +16,16 @@ story and wait until after v0.1. Next product work is roadmap #11 (release).
 
 ## Pick up here tomorrow
 
-**Next: tag 0.1.2**, so the Action can pin a release instead of a commit
-(Jev Score is not in v0.1.1). Then real PR history as evidence (reverts /
-incident-linked PRs as labels; repository to be chosen). `POST /v1/decision`
-waits for a caller that is not GitHub. PyPI still undecided.
+**Next: run the Action on a real GitHub repository** (labels API only stubbed
+so far; needs a test repo with the `TYPESAFE_API_KEY` secret), then **real PR
+history as evidence** (reverts / incident-linked PRs as labels; repository to
+be chosen). `POST /v1/decision` waits for a caller that is not GitHub. PyPI
+still undecided.
+
+Done 2026-11-06 — **0.1.2 released**: tag `v0.1.2`. Cascade certify +
+recertify + drift, selective risk, ordinal risk, live Jev Score, code-review
+pack, thin-gate Action (now pinned to `v0.1.2`). Example profiles regenerated
+(only `decisionops_version` changed; thresholds and decisions identical).
 
 Done 2026-11-06 — thin gate #10, GitHub Action part (`examples/github-action/`):
 
@@ -30,7 +36,7 @@ Done 2026-11-06 — thin gate #10, GitHub Action part (`examples/github-action/`
   checked before routing.
 - `decisionops-pr-route.yml`: base-commit checkout (no PR code with secrets),
   forks skipped, decision uploaded for the audit loop, placeholder escalate job.
-  Install is pinned to commit d4e945b until 0.1.2 exists.
+  Install pinned to `v0.1.2`.
 - Tests: `tests/test_pr_route_example.py` (7, fake Jev). Live dry run against
   `jev-1.14.0` on the sample event: auth "typo fix" → auto `human`.
 - Not exercised on a real GitHub repository yet (labels API calls are tested

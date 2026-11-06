@@ -82,5 +82,5 @@
     "temp_ratio": 0.2,
     "loss_bound": 1.0
   },
-  "decisionops_version": "0.1.1"
+  "decisionops_version": "0.1.2"
 }

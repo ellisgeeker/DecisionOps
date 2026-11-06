@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.2 — 2026-11-06
+
+Certified two-stage cascade with its label loop, ordinal (Score) risk, live Jev
+Score, and the first showcase: a code-review pack and a thin-gate GitHub Action.
+
 ### Added
 
 - Thin gate example `examples/github-action/`: a GitHub Action and
@@ -64,6 +69,13 @@
 - findings §11: joint CRC at α=5% leaves ~10.6% error among automated cases;
   the selective certificate exceeds α in 3–8% of draws against a 10% budget, at
   the cost of much lower coverage.
+
+### Fixed
+
+- HTTP provider: an error response whose body cannot be read (the server
+  closed the connection) now reports the HTTP status instead of escaping as a
+  raw socket error.
+- CLI error tests no longer depend on Typer's colour output on GitHub Actions.
 
 ## 0.1.1 — 2026-10-24
 

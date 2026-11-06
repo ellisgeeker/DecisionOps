@@ -64,7 +64,7 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | M0 git / Apache-2.0 / CI + 85% coverage gate | done |
 | Decision contract + asymmetric risk (`--contract`) | done |
 | Offline cascade / cost simulation (`cascade`) | done |
-| Certified two-stage cascade (`certify-cascade`) | done (unreleased) |
+| Certified two-stage cascade (`certify-cascade`) | done (0.1.2) |
 | Certified profile + runtime `decide()` (`certify --profile`, `decide`) | done |
 | Generic HTTP decision provider (`--provider http`) | done |
 | High-probability certificates (`certify --confidence-level`) | done |
@@ -74,9 +74,12 @@ Conformal Risk Control is the fix: it adds a `B/(n+1)` penalty and certifies `E[
 | Label-free drift monitor (`drift`) | done (0.1.1) |
 | Shadow-mode guide | done (0.1.1) |
 | Label loop measured end to end (findings §10) | done (0.1.1) |
-| Certified selective risk (`certify --risk selective`) | done (unreleased) |
-| Certified two-stage cascade (findings §12) | done (unreleased) |
-| Thin gate + code review pack + escalate LLMs | later (showcase) |
+| Certified selective risk (`certify --risk selective`) | done (0.1.2) |
+| Cascade recertify + drift (findings §12, §13) | done (0.1.2) |
+| Ordinal (Score) risk + live Jev Score | done (0.1.2) |
+| Code review showcase pack (`examples/code-review/`) | done (0.1.2) |
+| Thin gate: GitHub Action (`examples/github-action/`) | done (0.1.2) |
+| Thin gate: `POST /v1/decision` | later |
 
 See [docs/status.md](docs/status.md) for what is done, what is next, and known gaps.
 
@@ -85,10 +88,10 @@ See [docs/status.md](docs/status.md) for what is done, what is next, and known g
 Requires Python 3.12+. Not on PyPI yet; install a tagged release from GitHub:
 
 ```bash
-pip install "git+https://github.com/ellisgeeker/DecisionOps.git@v0.1.1"
+pip install "git+https://github.com/ellisgeeker/DecisionOps.git@v0.1.2"
 
 # with a live provider
-pip install "decisionops[jev] @ git+https://github.com/ellisgeeker/DecisionOps.git@v0.1.1"
+pip install "decisionops[jev] @ git+https://github.com/ellisgeeker/DecisionOps.git@v0.1.2"
 ```
 
 Extras: `jev` (TypeSafe SDK), `laya` (torch + transformers, ~1 GB), `bench` (build the public packs).

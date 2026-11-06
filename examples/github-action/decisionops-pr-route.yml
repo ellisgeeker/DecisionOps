@@ -43,10 +43,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Pin a tag or commit you certified with, never a moving branch.
-      # Jev Score needs a commit after v0.1.1 until 0.1.2 is tagged.
+      # Pin the tag you certified with, never a moving branch.
       - name: Install DecisionOps with Jev
-        run: pip install "decisionops[jev] @ git+https://github.com/ellisgeeker/DecisionOps@d4e945b96b6591c5eb8b3862966b8655b6ab2b4a"
+        run: pip install "decisionops[jev] @ git+https://github.com/ellisgeeker/DecisionOps@v0.1.2"
 
       - name: Route PR
         id: route
